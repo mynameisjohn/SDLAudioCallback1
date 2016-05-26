@@ -116,7 +116,7 @@ void Loop::GetData( float * const pMixBuffer, const size_t uSamplesDesired, cons
 			case State::TailPending:
 			case State::Pending:
 				// If we'll hit the trigger resolution
-				if ( uTentativeLastSample > m_uTriggerResolution )
+				if ( uTentativeLastSample >= m_uTriggerResolution )
 				{
 					// Advance the number of samples added to the remainder 
 					// of the way to the trigger resoution
