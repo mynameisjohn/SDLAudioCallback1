@@ -1,4 +1,5 @@
 import pylLoopManager as pylLM
+import pylSDLKeys as pylSDLK
 from LoopGraph import LoopState, LoopSequence, Loop
 from StateGraph import StateGraph
 import itertools
@@ -6,6 +7,7 @@ from collections import namedtuple
 import copy
 import networkx as nx
 import random
+import contextlib
 
 # Input to loop seq coro
 CoroData = namedtuple('CoroData', ('loopCount, setStartedLoops'))
@@ -37,25 +39,32 @@ def LoopCoroutine(SG):
 
         # If the loopcount has changed, inc the total loop count
         loopCount = int(cData.loopCount)
-        if loopCount > 0:
-            #print('loopcount changed by', loopCount)
-            totalLoopCount += loopCount
 
-            # It's strange hardcoding something like this... but that's why I'm writing python
-            # and not C++. Advance the state if lead2 or 4 just played, or if lead 7 just played
-            # for the second time (maybe the loop sequences should have a flag set when they loop back)
-            if 'lead2' in cData.setStartedLoops or 'lead4' in cData.setStartedLoops or (
-                'lead7' in cData.setStartedLoops and totalLoopCount % 2):
-                #print('Advancing graph state')
-                # Advance the state graph
-                sNext = SG.GetNextState()
+        sNext = SG.GetNextState()
+        if sNext is not sA:
+            # Build up changeset from new state, post changes
+            curSet = set(sNext.GetActiveLoopGen())
+            changes = ChangeSet(prevSet - curSet, curSet - prevSet)
+            continue
+        #if loopCount > 0:
+        #    #print('loopcount changed by', loopCount)
+        #    totalLoopCount += loopCount
 
-                # If the state changed
-                if sA is not sNext:
-                    # Build up changeset from new state, post changes
-                    curSet = set(sNext.GetActiveLoopGen())
-                    changes = ChangeSet(prevSet - curSet, curSet - prevSet)
-                    continue
+        #    # It's strange hardcoding something like this... but that's why I'm writing python
+        #    # and not C++. Advance the state if lead2 or 4 just played, or if lead 7 just played
+        #    # for the second time (maybe the loop sequences should have a flag set when they loop back)
+        #    if 'lead2' in cData.setStartedLoops or 'lead4' in cData.setStartedLoops or (
+        #        'lead7' in cData.setStartedLoops and totalLoopCount % 2):
+        #        #print('Advancing graph state')
+        #        # Advance the state graph
+        #        sNext = SG.GetNextState()
+
+        #        # If the state changed
+        #        if sA is not sNext:
+        #            # Build up changeset from new state, post changes
+        #            curSet = set(sNext.GetActiveLoopGen())
+        #            changes = ChangeSet(prevSet - curSet, curSet - prevSet)
+        #            continue
 
         # If we didn't continue above, and if no 
         # loops have just started, then continue
@@ -114,19 +123,29 @@ def CreateStateGraph():
             Loop('lead7', 'lead7.wav')], itertools.cycle)
     })
 
-    # Create the directed graph; s1, s2 connect and self connect
+    # Create the directed graph; all nodes connect and self connect
     G = nx.DiGraph()
-    G.add_edges_from([(s1, s2), (s2, s3), (s3, s1)])
-        #itertools.product((s1, s2, s3), (s1, s2, s3)))
+    G.add_edges_from(itertools.product((s1, s2, s3), (s1, s2, s3)))
+
+    # Define the edges
+    edgeDict = {
+        s1 : [1, 0, 0],
+        s2 : [0, 1, 0],
+        s3 : [0, 0, 1]
+        }
+    for n in G.nodes():
+        for nn in G.neighbors(n):
+            G[n][nn]['pathVec'] = edgeDict[nn]
+    print(G.edges())
 
     # The advance function just returns a random neighbor
     def fnAdvance(SG):
-        if SG.activeState is None:
-            return random.choice(SG.G.nodes())
-        return random.choice(SG.G.neighbors(SG.activeState))
+        def dot(A, B):
+            return sum(a * b for a, b in itertools.zip_longest(A, B, fillvalue = 0))
+        return max(SG.G.out_edges_iter(SG.activeState, data = True), key = lambda x : dot(SG.stim, x[2]['pathVec']))[1]
 
     # return the state graph
-    return StateGraph(G, fnAdvance, s1)
+    return StateGraph(G, fnAdvance, s1, {'stim' : edgeDict[s1]})
 
 # Globally declare state graph instance, init to None
 g_SG = None
@@ -183,3 +202,15 @@ def Update(pLoopManager, loopCount, setStartedLoops):
         for turnOn in changeSets.setToTurnOn:
             messageList.append((pylLM.CMDStartLoop, (turnOn.name, LM.GetMaxSampleCount())))
         LM.SendMessages(messageList)
+
+def HandleKey(keyCode, bIsKeyDown):
+    if not bIsKeyDown:
+        global g_SG
+        keyDict = {
+            pylSDLK.A : [1, 0, 0],
+            pylSDLK.B : [0, 1, 0],
+            pylSDLK.C : [0, 0, 1]
+        }
+        print(keyDict, keyCode)
+        if keyCode in keyDict.keys():
+            g_SG.stim = keyDict[keyCode]
