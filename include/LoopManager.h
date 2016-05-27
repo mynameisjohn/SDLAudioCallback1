@@ -34,7 +34,7 @@ public:
 		// These commands are sent from the audio thread to
 		// anyone who cares, used right now to queue up
 		// new loops (which is a pain in the ass)
-		LoopStarted,
+		LoopLaunched,
 		LongestLoopCompleted
 	};
 

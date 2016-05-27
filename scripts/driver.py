@@ -41,6 +41,9 @@ def LoopCoroutine(SG):
             #print('loopcount changed by', loopCount)
             totalLoopCount += loopCount
 
+            # It's strange hardcoding something like this... but that's why I'm writing python
+            # and not C++. Advance the state if lead2 or 4 just played, or if lead 7 just played
+            # for the second time (maybe the loop sequences should have a flag set when they loop back)
             if 'lead2' in cData.setStartedLoops or 'lead4' in cData.setStartedLoops or (
                 'lead7' in cData.setStartedLoops and totalLoopCount % 2):
                 #print('Advancing graph state')
@@ -83,44 +86,32 @@ def LoopCoroutine(SG):
 
 # Function to create state graph
 def CreateStateGraph():
-    # Create the states (three for now, very redundant)
-    s1 = LoopState('One', {
-    LoopSequence('chSustain',[
-        Loop('chSustain1', 'chSustain1_head.wav', 5, 1., 'chSustain1_tail.wav')]),
-    LoopSequence('bass',[
-        Loop('bass', 'bass1_head.wav', 5, 1.,'bass1_tail.wav')]),
-    LoopSequence('drums',[
-        Loop('drum', 'drum1_head.wav', 5, 1.,'drum1_tail.wav')]),
-    LoopSequence('lead',[
-        Loop('lead1', 'lead1.wav'),
-        Loop('lead2', 'lead2_head.wav', 5, 1.,'lead2_tail.wav')], itertools.cycle)
+    # Create the states (these three sequences are common to all)
+    lSeq_chSustain = LoopSequence('chSustain',[Loop('chSustain1', 'chSustain1_head.wav', 5, 1., 'chSustain1_tail.wav')])
+    lSeq_bass = LoopSequence('bass',[Loop('bass', 'bass1_head.wav', 5, 1.,'bass1_tail.wav')])
+    lSeq_drums = LoopSequence('drums',[Loop('drum', 'drum1_head.wav', 5, 1.,'drum1_tail.wav')])
+
+    # State 1 just plays lead1, lead2, lead1, lead2...
+    s1 = LoopState('One', {lSeq_chSustain, lSeq_bass, lSeq_drums,
+        LoopSequence('lead',[
+            Loop('lead1', 'lead1.wav'),
+            Loop('lead2', 'lead2_head.wav', 5, 1.,'lead2_tail.wav')], itertools.cycle)
     })
 
-    s2 = LoopState('Two', {
-    LoopSequence('chSustain',[
-        Loop('chSustain1', 'chSustain1_head.wav', 5, 1., 'chSustain1_tail.wav')]),
-    LoopSequence('bass',[
-        Loop('bass', 'bass1_head.wav', 5, 1.,'bass1_tail.wav')]),
-    LoopSequence('drums',[
-        Loop('drum', 'drum1_head.wav', 5, 1.,'drum1_tail.wav')]),
-    LoopSequence('lead',[
-        Loop('lead3', 'lead3.wav'),
-        Loop('lead4', 'lead4.wav')], itertools.cycle)
+    # State 2 just plays lead3, lead4, lead3, lead4...
+    s2 = LoopState('Two', {lSeq_chSustain, lSeq_bass, lSeq_drums,
+        LoopSequence('lead',[
+            Loop('lead3', 'lead3.wav'),
+            Loop('lead4', 'lead4.wav')], itertools.cycle)
     })
 
-
-    s3 = LoopState('Three', {
-    LoopSequence('chSustain',[
-        Loop('chSustain1', 'chSustain1_head.wav', 5, 1., 'chSustain1_tail.wav')]),
-    LoopSequence('bass',[
-        Loop('bass', 'bass1_head.wav', 5, 1.,'bass1_tail.wav')]),
-    LoopSequence('drums',[
-        Loop('drum', 'drum1_head.wav', 5, 1.,'drum1_tail.wav')]),
-    LoopSequence('lead',[
-        Loop('lead5', 'lead5.wav'),
-        Loop('lead6', 'lead6.wav'),
-        Loop('lead7', 'lead7.wav'),
-        Loop('lead7', 'lead7.wav')], itertools.cycle)
+    # State 3 plays lead5, lead6, lead7, lead7...
+    s3 = LoopState('Three', {lSeq_chSustain, lSeq_bass, lSeq_drums, 
+        LoopSequence('lead',[
+            Loop('lead5', 'lead5.wav'),
+            Loop('lead6', 'lead6.wav'),
+            Loop('lead7', 'lead7.wav'),
+            Loop('lead7', 'lead7.wav')], itertools.cycle)
     })
 
     # Create the directed graph; s1, s2 connect and self connect

@@ -14,7 +14,7 @@ struct prIsTaskFromAudioThread
 		switch ( T.eCmdID )
 		{
 			case LoopManager::Command::LongestLoopCompleted:
-			case LoopManager::Command::LoopStarted:
+			case LoopManager::Command::LoopLaunched:
 				return true;
 
 		}
@@ -204,7 +204,7 @@ void LoopManager::Update( pyl::Object& obDriverScript )
 	{
 		switch ( T.eCmdID )
 		{
-			case Command::LoopStarted:
+			case Command::LoopLaunched:
 				if ( setLoopsStarted.count( T.pLoop->GetName() ) )
 					throw std::runtime_error( "More than one loop passed!" );
 				setLoopsStarted.insert( T.pLoop->GetName() );
@@ -312,22 +312,23 @@ void LoopManager::fill_audio_impl( Uint8 * pStream, int nBytesToFill )
 		// detect if any loops are going from pending to starting this iteration
 		Loop& l = itLoop.second;
 
+		// We may want to post a message indicating that this loop has started over - first check boundaries
 		bool bPostMessage = ((m_uSamplePos % l.GetNumSamples()) + uNumSamplesDesired > l.GetNumSamples());
 
 		Loop::State eInitialState = l.GetState();
 		l.GetData( (float *) pStream, uNumSamplesDesired, m_uSamplePos );
 		Loop::State eFinalState = l.GetState();
 
+		// We'd also like to post a message if it just went from pending to starting, but not if it's stopped or tailing now
 		bPostMessage = bPostMessage || (eInitialState == Loop::State::Pending && eFinalState == Loop::State::Starting);
 		bPostMessage = bPostMessage && (l.GetState() != Loop::State::Stopped && l.GetState() != Loop::State::Tail);
 
-		// For every loop that has just started, create a task for the main thread to send to python
+		// Create the task, it will make it back to the public queue next call
 		if ( bPostMessage )
 		{
-			// Create the task, it will make it back to the public queue next call
 			Task T;
 			T.pLoop = &l;
-			T.eCmdID = Command::LoopStarted;
+			T.eCmdID = Command::LoopLaunched;
 			m_liAudioTaskQueue.push_back( T );
 		}
 	}
