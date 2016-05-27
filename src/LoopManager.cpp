@@ -37,8 +37,8 @@ bool LoopManager::AddLoop( std::string strLoopName, std::string strHeadFile, std
 	// This shouldn't be happening at a bad time, but just in case
 	std::lock_guard<std::mutex> lg( m_muAudioMutex );
 
-	if ( m_mapLoops.find( strHeadFile ) != m_mapLoops.end() )
-		return false;
+	if ( m_mapLoops.find( strLoopName ) != m_mapLoops.end() )
+		return true;
 
 	float * pSoundBuffer( nullptr );
 	Uint32 uNumBytesInHead( 0 );
@@ -311,18 +311,23 @@ void LoopManager::fill_audio_impl( Uint8 * pStream, int nBytesToFill )
 		// Get audio data, 
 		// detect if any loops are going from pending to starting this iteration
 		Loop& l = itLoop.second;
+
+		bool bPostMessage = ((m_uSamplePos % l.GetNumSamples()) + uNumSamplesDesired > l.GetNumSamples());
+
 		Loop::State eInitialState = l.GetState();
 		l.GetData( (float *) pStream, uNumSamplesDesired, m_uSamplePos );
 		Loop::State eFinalState = l.GetState();
 
+		bPostMessage = bPostMessage || (eInitialState == Loop::State::Pending && eFinalState == Loop::State::Starting);
+		bPostMessage = bPostMessage && (l.GetState() != Loop::State::Stopped && l.GetState() != Loop::State::Tail);
+
 		// For every loop that has just started, create a task for the main thread to send to python
-		if ( eInitialState == Loop::State::Pending && eFinalState == Loop::State::Starting )
+		if ( bPostMessage )
 		{
+			// Create the task, it will make it back to the public queue next call
 			Task T;
 			T.pLoop = &l;
 			T.eCmdID = Command::LoopStarted;
-
-			// This will make it back to the public queue next call
 			m_liAudioTaskQueue.push_back( T );
 		}
 	}
@@ -330,7 +335,17 @@ void LoopManager::fill_audio_impl( Uint8 * pStream, int nBytesToFill )
 	// Update sample counter, reset if we went over
 	m_uSamplePos += uNumSamplesDesired;
 	if ( m_uSamplePos > m_uMaxSampleCount )
-		m_uSamplePos %= m_uMaxSampleCount;		
+	{
+		// Just do a mod
+		m_uSamplePos %= m_uMaxSampleCount;
+
+		// We also want to post a message indicating that the 
+		// longest loop has completed... unfortunately this won't be posted
+		// until the next call to updateTaskQueue
+		Task T;
+		T.eCmdID = Command::LongestLoopCompleted;
+		m_liAudioTaskQueue.push_back( T );
+	}
 }
 
 // Static SDL audio callback function (each instance sets its own userdata to this, so I guess
