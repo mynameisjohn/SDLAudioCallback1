@@ -178,17 +178,11 @@ void LoopManager::Update( pyl::Object& obDriverScript )
 	{
 		// We gotta lock this while we mess with the public queue
 		std::lock_guard<std::mutex> lg( m_muAudioMutex );
-		//if ( m_liPublicTaskQueue.empty() )
-		//	return;
 
 		// This is actually kind of expensive... but whatever
 		auto itFromAudThread = std::remove_if( m_liPublicTaskQueue.begin(), m_liPublicTaskQueue.end(), prIsTaskFromAudioThread() );
 		liNewTaskList.splice( liNewTaskList.end(), m_liPublicTaskQueue, itFromAudThread, m_liPublicTaskQueue.end() );
 	}
-
-	// Right now all we do is send data to python, so if there's no news then get out
-	//if ( liNewTaskList.empty() )
-	//	return;
 
 	// This could be a class member, but I feel like that's python's job
 	// The only concern is if it's out of date... anyway

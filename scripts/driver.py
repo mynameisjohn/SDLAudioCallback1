@@ -9,6 +9,10 @@ import networkx as nx
 import random
 import contextlib
 
+# Cartesian product
+def dot(A, B):
+    return sum(a * b for a, b in itertools.zip_longest(A, B, fillvalue = 0))
+
 # Input to loop seq coro
 CoroData = namedtuple('CoroData', ('loopCount, setStartedLoops'))
 
@@ -40,31 +44,15 @@ def LoopCoroutine(SG):
         # If the loopcount has changed, inc the total loop count
         loopCount = int(cData.loopCount)
 
+        # At every iteration, advance the graph state
         sNext = SG.GetNextState()
+
+        # If the state changed, 
         if sNext is not sA:
             # Build up changeset from new state, post changes
             curSet = set(sNext.GetActiveLoopGen())
             changes = ChangeSet(prevSet - curSet, curSet - prevSet)
             continue
-        #if loopCount > 0:
-        #    #print('loopcount changed by', loopCount)
-        #    totalLoopCount += loopCount
-
-        #    # It's strange hardcoding something like this... but that's why I'm writing python
-        #    # and not C++. Advance the state if lead2 or 4 just played, or if lead 7 just played
-        #    # for the second time (maybe the loop sequences should have a flag set when they loop back)
-        #    if 'lead2' in cData.setStartedLoops or 'lead4' in cData.setStartedLoops or (
-        #        'lead7' in cData.setStartedLoops and totalLoopCount % 2):
-        #        #print('Advancing graph state')
-        #        # Advance the state graph
-        #        sNext = SG.GetNextState()
-
-        #        # If the state changed
-        #        if sA is not sNext:
-        #            # Build up changeset from new state, post changes
-        #            curSet = set(sNext.GetActiveLoopGen())
-        #            changes = ChangeSet(prevSet - curSet, curSet - prevSet)
-        #            continue
 
         # If we didn't continue above, and if no 
         # loops have just started, then continue
@@ -127,7 +115,8 @@ def CreateStateGraph():
     G = nx.DiGraph()
     G.add_edges_from(itertools.product((s1, s2, s3), (s1, s2, s3)))
 
-    # Define the edges
+    # Define the vectors between edges 
+    # (used during dot product calculation, SG.stim is one of these)
     edgeDict = {
         s1 : [1, 0, 0],
         s2 : [0, 1, 0],
@@ -136,16 +125,21 @@ def CreateStateGraph():
     for n in G.nodes():
         for nn in G.neighbors(n):
             G[n][nn]['pathVec'] = edgeDict[nn]
-    print(G.edges())
+
+    # Set up the key handling dict
+    keyDict = {
+        pylSDLK.Num1 : edgeDict[s1],
+        pylSDLK.Num2 : edgeDict[s2],
+        pylSDLK.Num3 : edgeDict[s3]
+    }
 
     # The advance function just returns a random neighbor
     def fnAdvance(SG):
-        def dot(A, B):
-            return sum(a * b for a, b in itertools.zip_longest(A, B, fillvalue = 0))
-        return max(SG.G.out_edges_iter(SG.activeState, data = True), key = lambda x : dot(SG.stim, x[2]['pathVec']))[1]
+        # Return the target of the edge out of activeState whose pathVec is most in line with stim
+        return max(SG.G.out_edges_iter(SG.activeState, data = True), key = lambda edge : dot(SG.stim, edge[2]['pathVec']))[1]
 
     # return the state graph
-    return StateGraph(G, fnAdvance, s1, {'stim' : edgeDict[s1]})
+    return StateGraph(G, fnAdvance, s1, {'keyDict' : keyDict, 'stim' : edgeDict[s1]})
 
 # Globally declare state graph instance, init to None
 g_SG = None
@@ -203,14 +197,13 @@ def Update(pLoopManager, loopCount, setStartedLoops):
             messageList.append((pylLM.CMDStartLoop, (turnOn.name, LM.GetMaxSampleCount())))
         LM.SendMessages(messageList)
 
+# As rudimentary as it gets, if the keycode
+# is in the state graph's key dict, use keyUps
+# to affect a state transition
 def HandleKey(keyCode, bIsKeyDown):
+    # If it's not a keydown, it's a keyup
     if not bIsKeyDown:
         global g_SG
-        keyDict = {
-            pylSDLK.A : [1, 0, 0],
-            pylSDLK.B : [0, 1, 0],
-            pylSDLK.C : [0, 0, 1]
-        }
-        print(keyDict, keyCode)
-        if keyCode in keyDict.keys():
-            g_SG.stim = keyDict[keyCode]
+        if keyCode in g_SG.keyDict.keys():
+            # Set the stim directly, it'll be used in the coro
+            g_SG.stim = g_SG.keyDict[keyCode]

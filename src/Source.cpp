@@ -8,6 +8,26 @@
 
 int main(int argc, char ** argv)
 {
+	// Create the SDL keys module for python
+	pyl::ModuleDef * pSDLKeysModule = pyl::ModuleDef::CreateModuleDef<struct st_SDLK>( "pylSDLKeys" );
+	if ( pSDLKeysModule == nullptr )
+	{
+		std::cout << "Error: Unable to create SDL keycode python module" << std::endl;
+		pyl::print_error();
+		return -1;
+	}
+
+	// Expose various LoopManager things to python, init python and lm module
+	LoopManager::pylExpose();
+	pyl::initialize();
+	LoopManager::pylInit();
+
+	// Add the key codes after initializing... wouldn't it be nice to
+	// be able to do this using some sort of callback on init?
+	pSDLKeysModule->AsObject().set_attr( "Num1", (int) SDLK_1 );
+	pSDLKeysModule->AsObject().set_attr( "Num2", (int) SDLK_2 );
+	pSDLKeysModule->AsObject().set_attr( "Num3", (int) SDLK_3 );
+
 	// Create audio spec and construct loopmanager
 	// This could be initialized by python
 	SDL_AudioSpec sdlAudioSpec{ 0 };
@@ -17,20 +37,6 @@ int main(int argc, char ** argv)
 	sdlAudioSpec.samples = 4096;
 	sdlAudioSpec.callback = (SDL_AudioCallback) LoopManager::FillAudio;
 	LoopManager lm( sdlAudioSpec );
-
-	// Create the SDL keys module for python
-	pyl::ModuleDef * pSDLKeysModule = pyl::ModuleDef::CreateModuleDef<struct st_SDLK>( "pylSDLKeys" );
-	if ( pSDLKeysModule == nullptr )
-		return -1;
-
-	// Expose various LoopManager things to python, init python and lm module
-	LoopManager::pylExpose();
-	pyl::initialize();
-	LoopManager::pylInit();
-
-	pSDLKeysModule->AsObject().set_attr( "A", (int) SDLK_a );
-	pSDLKeysModule->AsObject().set_attr( "B", (int) SDLK_b );
-	pSDLKeysModule->AsObject().set_attr( "C", (int) SDLK_c );
 	
 	// Load up the driver module and init the loopmanager
 	pyl::Object obDriverModule = pyl::Object::from_script( "../scripts/driver.py" );
@@ -44,7 +50,7 @@ int main(int argc, char ** argv)
 		return -1;
 	}
 
-	//Create Window
+	// Create Window (only used for keyboard input, as of now)
 	SDL_Window * pWindow = SDL_CreateWindow( "3D Test",
 								 SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 								 800, 600,
@@ -65,6 +71,7 @@ int main(int argc, char ** argv)
 		SDL_Event e;
 		while ( SDL_PollEvent( &e ) )
 		{
+			// We only care about the keyboard for now
 			if ( e.type == SDL_KEYDOWN || e.type == SDL_KEYUP )
 			{
 				SDL_Keycode kc = e.key.keysym.sym;
@@ -74,6 +81,7 @@ int main(int argc, char ** argv)
 					continue;
 				}
 
+				// These could be stored and sent in one go
 				obDriverModule.call_function( "HandleKey", (int) kc, e.type == SDL_KEYDOWN );
 			}
 		}
