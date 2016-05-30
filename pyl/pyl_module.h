@@ -61,6 +61,7 @@ namespace pyl
 		std::string m_strModDocs;										/*!< The string containing module docs */
 		std::string m_strModName;										/*!< The string containing the module name */
 		std::function<PyObject *()> m_fnModInit;						/*!< Function called on import that creates the module*/
+		std::function<void( Object )> m_fnCustomInit;
 
 	// These are internal functions used by the expose APIs that create functions
 	private:
@@ -417,6 +418,8 @@ namespace pyl
 		*/
 		static int InitAllModules();
 
+		void SetCustomModuleInit( std::function<void( Object )> fnInit );
+
 		// Don't ever call this... it isn't even implemented, but some STL containers demand that it exists
 		ModuleDef();
 	};
@@ -424,3 +427,13 @@ namespace pyl
 	Object GetMainModule();
 	Object GetModule( std::string modName );
 }
+
+#define S1(x) #x
+#define S2(x) S1(x)
+
+#define AddFnToMod(F, R, M, ...)\
+	M->RegisterFunction<struct __st_fn##F>(#F, pyl::make_function(F));
+
+#define AddMemFnToMod(C, F, R, M, ...)\
+	std::function<R(C *, ##__VA_ARGS__)> fn##F = &C::F;\
+	M->RegisterMemFunction<C, struct __st_fn##C##F>(#F, fn##F);

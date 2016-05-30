@@ -74,11 +74,17 @@ private:
 	// Turn a message into something useful
 	Task translateMessage( Message& M );
 public:
+	LoopManager();
+	~LoopManager();
+
 	// Constructor takes audio spec used to load loops
 	LoopManager( SDL_AudioSpec sdlAudioSpec );
 
 	// Called periodically to pump python script
 	void Update(pyl::Object& driverScript);
+
+	bool Configure( std::map<std::string, int> mapAudCfg );
+	bool Start();
 
 	// Various gets
 	size_t GetMaxSampleCount() const;
@@ -101,5 +107,4 @@ public:
 	// PYL stuff
 	static const std::string strModuleName;
 	static bool pylExpose();
-	static bool pylInit();
 };

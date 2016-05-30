@@ -2,8 +2,6 @@
 #include <algorithm>
 #include <iostream>
 
-const std::string LoopManager::strModuleName = "pylLoopManager";
-
 // Predicate used to determine whether or not a task is coming from
 // the audio thread (based on the enum...)
 struct prIsTaskFromAudioThread
@@ -24,12 +22,27 @@ struct prIsTaskFromAudioThread
 	using argument_type = LoopManager::Task;
 };
 
+LoopManager::LoopManager() :
+	m_uSamplePos( 0 ),
+	m_uMaxSampleCount( 0 )
+{
+}
+
 LoopManager::LoopManager( SDL_AudioSpec sdlAudioSpec ) :
 	m_uSamplePos( 0 ),
 	m_uMaxSampleCount( 0 ),
 	m_AudioSpec( sdlAudioSpec )
 {
-	m_AudioSpec.userdata = this;
+	m_AudioSpec.userdata = nullptr;
+}
+
+LoopManager::~LoopManager()
+{
+	if ( m_AudioSpec.userdata )
+	{
+		SDL_CloseAudio();
+		memset( &m_AudioSpec, 0, sizeof( SDL_AudioSpec ) );
+	}
 }
 
 bool LoopManager::AddLoop( std::string strLoopName, std::string strHeadFile, std::string strTailFile, size_t uFadeDurationMS, float fVol )
@@ -371,7 +384,48 @@ size_t LoopManager::GetMaxSampleCount() const
 	return m_uMaxSampleCount;
 }
 
+bool LoopManager::Configure( std::map<std::string, int> mapAudCfg )
+{
+	try
+	{
+		m_AudioSpec.freq = mapAudCfg.at( "freq" );
+		m_AudioSpec.channels = mapAudCfg.at( "channels" );
+		m_AudioSpec.samples = mapAudCfg.at( "bufSize" );
+
+	}
+	catch ( std::out_of_range )
+	{
+		memset( &m_AudioSpec, 0, sizeof( SDL_AudioSpec ) );
+		return false;
+	}
+
+	m_AudioSpec.format = AUDIO_F32;
+	m_AudioSpec.callback = (SDL_AudioCallback) LoopManager::FillAudio;
+	m_AudioSpec.userdata = this;
+
+	return true;
+}
+
+bool LoopManager::Start()
+{
+	if ( m_AudioSpec.userdata == nullptr )
+		return false;
+
+	SDL_AudioSpec received;
+	if ( SDL_OpenAudio( &m_AudioSpec, &received ) )
+	{
+		std::cout << "Error initializing SDL Audio" << std::endl;
+		std::cout << SDL_GetError() << std::endl;
+		return false;
+	}
+
+	SDL_PauseAudio( 0 );
+
+	return true;
+}
+
 // Expose the LM class and some functions
+const std::string LoopManager::strModuleName = "pylLoopManager";
 /*static*/ bool LoopManager::pylExpose()
 {
 	using pyl::ModuleDef;
@@ -381,41 +435,26 @@ size_t LoopManager::GetMaxSampleCount() const
 
 	pLoopManagerDef->RegisterClass<LoopManager>( "LoopManager" );
 
-	std::function<bool( LoopManager *, std::string, std::string, std::string, size_t, float )> fnLMAddLoop = &LoopManager::AddLoop;
-	pLoopManagerDef->RegisterMemFunction<LoopManager, struct st_fnLMAddLoop>( "AddLoop" , fnLMAddLoop );
+	AddMemFnToMod( LoopManager, AddLoop, bool, pLoopManagerDef, std::string, std::string, std::string, size_t, float );
+	AddMemFnToMod( LoopManager, SendMessages, bool, pLoopManagerDef, std::list<LoopManager::Message> );
+	AddMemFnToMod( LoopManager, SendMessage, bool, pLoopManagerDef, LoopManager::Message );
+	AddMemFnToMod( LoopManager, GetSampleRate, size_t, pLoopManagerDef );
+	AddMemFnToMod( LoopManager, GetMaxSampleCount, size_t, pLoopManagerDef );
+	AddMemFnToMod( LoopManager, Configure, bool, pLoopManagerDef, std::map<std::string, int> );
+	AddMemFnToMod( LoopManager, Start, bool, pLoopManagerDef );
 
-	std::function<size_t( LoopManager * )> fnLMGetSampleRate = &LoopManager::GetSampleRate;
-	pLoopManagerDef->RegisterMemFunction<LoopManager, struct st_fnLMGetSampleRate>( "GetSampleRate", fnLMGetSampleRate );
-
-	std::function<bool( LoopManager *, LoopManager::Message )> fnLMSendMessage = &LoopManager::SendMessage;
-	pLoopManagerDef->RegisterMemFunction<LoopManager, struct st_fnLMSendMessage>( "SendMessage", fnLMSendMessage );
-
-	std::function<bool( LoopManager *, std::list<LoopManager::Message> ) > fnLMSendMessages = &LoopManager::SendMessages;
-	pLoopManagerDef->RegisterMemFunction<LoopManager, struct st_fnLMSendMessages>( "SendMessages", fnLMSendMessages );
-
-	std::function<size_t( LoopManager * )> fnLMGetMaxSampleCount = &LoopManager::GetMaxSampleCount;
-	pLoopManagerDef->RegisterMemFunction<LoopManager, struct st_fnLMGetMaxSampleCount>( "GetMaxSampleCount", fnLMGetMaxSampleCount );
+	pLoopManagerDef->SetCustomModuleInit( [] ( pyl::Object obModule )
+	{
+		// Expose command enums into the module
+		obModule.set_attr( "CMDSetVolume", (int) Command::SetVolume );
+		obModule.set_attr( "CMDStart", (int) Command::Start );
+		obModule.set_attr( "CMDStartLoop", (int) Command::StartLoop );
+		obModule.set_attr( "CMDStop", (int) Command::Stop );
+		obModule.set_attr( "CMDStopLoop", (int) Command::StopLoop );
+		obModule.set_attr( "CMDPause", (int) Command::Pause );
+	} );
 
 	pLoopManagerDef->RegisterClass<Loop>( "Loop" );
-
-	return true;
-}
-
-// Expose command enums into the module
-/*static*/ bool LoopManager::pylInit()
-{
-	using pyl::ModuleDef;
-	ModuleDef * pLoopManagerDef = ModuleDef::GetModuleDef( LoopManager::strModuleName );
-	if ( pLoopManagerDef == nullptr )
-		return false;
-
-	pyl::Object mod = pLoopManagerDef->AsObject();
-	mod.set_attr( "CMDSetVolume",	(int) Command::SetVolume );
-	mod.set_attr( "CMDStart",		(int) Command::Start );
-	mod.set_attr( "CMDStartLoop",	(int) Command::StartLoop );
-	mod.set_attr( "CMDStop",		(int) Command::Stop );
-	mod.set_attr( "CMDStopLoop",	(int) Command::StopLoop );
-	mod.set_attr( "CMDPause",		(int) Command::Pause );
 
 	return true;
 }

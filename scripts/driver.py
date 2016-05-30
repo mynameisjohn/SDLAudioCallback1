@@ -1,5 +1,3 @@
-import pylLoopManager as pylLM
-import pylSDLKeys as pylSDLK
 from LoopGraph import LoopState, LoopSequence, Loop
 from StateGraph import StateGraph
 import itertools
@@ -7,7 +5,14 @@ from collections import namedtuple
 import copy
 import networkx as nx
 import random
-import contextlib
+import math
+
+import pylLoopManager as pylLM
+import pylSDLKeys as pylSDLK
+import pylScene
+import pylDrawable
+import pylShader
+import pylCamera
 
 # Cartesian product
 def dot(A, B):
@@ -148,6 +153,13 @@ g_SG = None
 g_LoopCoro = None
 
 def InitLoopManager(pLoopManager):
+    # Create LM
+    LM = pylLM.LoopManager(pLoopManager)
+
+    # Init audio spec
+    if LM.Configure({'freq' : 44100, 'channels' : 1, 'bufSize' : 4096}) == False:
+        raise RuntimeError('Invalid aud config dict')
+
     # Globally capture stategraph, coroutine
     global g_SG
     global g_LoopCoro
@@ -158,7 +170,6 @@ def InitLoopManager(pLoopManager):
     next(g_LoopCoro)
 
     # Create the py LM and get the samples per mS
-    LM = pylLM.LoopManager(pLoopManager)
     sampPerMS = int(LM.GetSampleRate() / 1000.)
 
     # For each loop in the state's loop sequences
@@ -175,6 +186,9 @@ def InitLoopManager(pLoopManager):
     # Start the active loop seq
     messageList = [(pylLM.CMDStartLoop, (l.name, 0)) for l in g_SG.GetActiveState().GetActiveLoopGen()]
     LM.SendMessages(messageList)
+    
+    if LM.Start() == False:
+        raise RuntimeError('Error opening SDL audio device')
 
 # Updates the coro, given the # of loops advanced since
 # the last update and teh set of started loops (by name)
@@ -207,3 +221,43 @@ def HandleKey(keyCode, bIsKeyDown):
         if keyCode in g_SG.keyDict.keys():
             # Set the stim directly, it'll be used in the coro
             g_SG.stim = g_SG.keyDict[keyCode]
+
+def InitScene(pScene):
+    cScene = pylScene.Scene(pScene)
+
+    glVerMajor = 3
+    glVerMinor = 0
+    screenW = 800
+    screenH = 800
+    glBackgroundColor = [0.15, 0.15, 0.15, 1.]
+    cScene.InitDisplay(glVerMajor, glVerMinor, screenW, screenH, glBackgroundColor)
+
+    cShader = pylShader.Shader(cScene.GetShaderPtr())
+    strVertSrc = 'simple.vert'
+    strFragSrc = 'simple.frag'
+    if cShader.SetSrcFiles(strVertSrc, strFragSrc):
+        if cShader.CompileAndLink() != 0:
+            raise RuntimeError('Shader failed to compile!')
+    else:
+        raise RuntimeError('Error: Shader source not loaded')
+
+    cShader.Bind()
+
+    pylCamera.SetProjHandle(cShader.GetHandle('u_PMV'))
+    cCamera = pylCamera.Camera(cScene.GetCameraPtr())
+    camDim = [-10., 10.]
+    cCamera.InitOrtho(camDim, camDim, camDim)
+
+    InitLoopManager(cScene.GetLoopManagerPtr())
+
+    pylDrawable.SetPosHandle(cShader.GetHandle('a_Pos'))
+    pylDrawable.SetColorHandle(cShader.GetHandle('u_Color'))
+
+    global g_SG
+    nodes = g_SG.G.nodes()
+    dTH = 2 * math.pi / len(nodes)
+    for i in range(len(nodes)):
+        th = i * dTH - math.pi/2
+        cScene.AddDrawable('quad.iqm', [camDim[0]*math.cos(th)/2, camDim[0]*math.sin(th)/2], [1., 1.], [1., 1., 1., 1.])
+
+    cShader.Unbind()

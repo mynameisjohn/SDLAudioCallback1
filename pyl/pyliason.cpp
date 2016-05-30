@@ -381,7 +381,8 @@ namespace pyl
 	// Name and doc constructor
 	ModuleDef::ModuleDef( const std::string& moduleName, const std::string& moduleDocs ) :
 		m_strModDocs( moduleDocs ),
-		m_strModName( moduleName )
+		m_strModName( moduleName ),
+		m_fnCustomInit( [] ( Object o ) {} )
 	{
 	}
 
@@ -440,35 +441,26 @@ namespace pyl
 	// Create the function object invoked when this module is imported
 	void ModuleDef::createFnObject()
 	{
-		// We declare these pointers here acting under the assumption that they will
-		// remain valid (which means that no strings can be reassigned, no methods can
-		// be added, and no classes can be exposed after this call.)
-		const char * nameBuf = m_strModName.c_str();
-		const char * docBuf = m_strModDocs.c_str();
-		MethodDefinitions * defPtr = &m_vMethodDef;
-		PyModuleDef * pModDef = &m_pyModDef;
-		std::map<std::type_index, ExposedClass>* expClassMap = &m_mapExposedClasses;
-
 		// Declare the init function, which gets called on import and returns a PyObject *
-		// that represent the module itself
-		m_fnModInit = [nameBuf, docBuf, defPtr, pModDef, expClassMap] ()
+		// that represent the module itself (I hate capture this, but it felt necessary)
+		m_fnModInit = [this] ()
 		{
 			// The MethodDef contains all functions defined in C++ code,
 			// including those called into by exposed classes
-			*pModDef = PyModuleDef
+			m_pyModDef = PyModuleDef
 			{
 				PyModuleDef_HEAD_INIT,
-				nameBuf,
-				docBuf,
+				m_strModName.c_str(),
+				m_strModDocs.c_str(),
 				-1,
-				defPtr->Ptr()
+				m_vMethodDef.Ptr()
 			};
 
 			// Create the module if possible
-			if ( PyObject * mod = PyModule_Create( pModDef ) )
+			if ( PyObject * mod = PyModule_Create( &m_pyModDef ) )
 			{
 				// Declare all exposed classes within the module
-				for ( auto& exp_class : *expClassMap )
+				for ( auto& exp_class : m_mapExposedClasses )
 				{
 					// Get the classes PyTypeObject
 					auto pTypeObj = (PyTypeObject *) &(exp_class.second.m_TypeObject);
@@ -482,6 +474,9 @@ namespace pyl
 					// Add the type to the module
 					PyModule_AddObject( mod, className, typeObj );
 				}
+
+				// Call the init function once the module is created
+				m_fnCustomInit( { mod } );
 
 				// Return the created module
 				return mod;
@@ -525,14 +520,20 @@ namespace pyl
 	/*static*/ int ModuleDef::InitAllModules()
 	{
 		for ( auto& module : s_mapPyModules )
+		{
 			module.second.prepareClasses();
-
+		}
 		return 0;
 	}
 
 	const char * ModuleDef::getNameBuf() const
 	{
 		return m_strModName.c_str();
+	}
+
+	void ModuleDef::SetCustomModuleInit( std::function<void( Object )> fnCustomInit )
+	{
+		m_fnCustomInit = fnCustomInit;
 	}
 
 	Object GetModule( std::string modName )
