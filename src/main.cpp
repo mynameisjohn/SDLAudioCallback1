@@ -26,6 +26,8 @@ bool pylExpose()
 
 	pSDLKeysModule->SetCustomModuleInit( [] ( pyl::Object obModule )
 	{
+		obModule.set_attr( "Escape", (int) SDLK_ESCAPE );
+		obModule.set_attr( "Space", (int) SDLK_SPACE );
 		obModule.set_attr( "Num1", (int) SDLK_1 );
 		obModule.set_attr( "Num2", (int) SDLK_2 );
 		obModule.set_attr( "Num3", (int) SDLK_3 );
@@ -52,8 +54,11 @@ int main(int argc, char ** argv)
 		SDL_Event e;
 		while ( SDL_PollEvent( &e ) )
 		{
+			if ( e.type == SDL_QUIT )
+				bContinue = false;
+
 			// We only care about the keyboard for now
-			if ( e.type == SDL_KEYDOWN || e.type == SDL_KEYUP )
+			else if ( e.type == SDL_KEYDOWN || e.type == SDL_KEYUP )
 			{
 				SDL_Keycode kc = e.key.keysym.sym;
 				if ( kc == SDLK_ESCAPE )
@@ -66,8 +71,7 @@ int main(int argc, char ** argv)
 				obDriverModule.call_function( "HandleKey", (int) kc, e.type == SDL_KEYDOWN );
 			}
 		}
-		S.Update( obDriverModule );
-		
+		S.Update();
 		S.Draw();
 	}
 

@@ -114,6 +114,11 @@ namespace pyl
 		}
 	}
 
+	void Object::Reset()
+	{
+		py_obj.reset();
+	}
+
 	void initialize() {
 		// Finalize any previous stuff
 		Py_Finalize();

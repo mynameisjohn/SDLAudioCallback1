@@ -4,9 +4,19 @@
 
 Scene::Scene( pyl::Object obInitScript ) :
 	m_GLContext( nullptr ),
-	m_pWindow( nullptr )
+	m_pWindow( nullptr ),
+	m_obDriverScript( obInitScript )
 {
-	obInitScript.call_function( "InitScene", this );
+	try
+	{
+		m_obDriverScript.call_function( "InitScene", this );
+	}
+	catch ( std::runtime_error )
+	{
+		m_GLContext = nullptr;
+		m_pWindow = nullptr;
+		m_obDriverScript.Reset();
+	}
 }
 
 Scene::~Scene()
@@ -47,9 +57,9 @@ void Scene::Draw()
 
 /*static*/const std::string Scene::strModuleName = "pylScene";
 
-void Scene::Update( pyl::Object obDriverScript )
+void Scene::Update()
 {
-	m_LoopManager.Update( obDriverScript );
+	m_LoopManager.Update( m_obDriverScript );
 }
 
 bool Scene::InitDisplay( int glMajor, int glMinor, int iScreenW, int iScreenH, vec4 v4ClearColor )
@@ -131,6 +141,13 @@ Camera * Scene::GetCameraPtr() const
 	return (Camera *) &m_Camera;
 }
 
+Drawable * Scene::GetDrawable( const size_t drIdx ) const
+{
+	if ( drIdx < m_vDrawables.size() )
+		return (Drawable *) &m_vDrawables[drIdx];
+	return nullptr;
+}
+
 /*static*/ void Scene::pylExpose()
 {
 	LoopManager::pylExpose();
@@ -156,4 +173,5 @@ Camera * Scene::GetCameraPtr() const
 	AddMemFnToMod( Scene, GetShaderPtr, Shader *, pSceneModuleDef );
 	AddMemFnToMod( Scene, GetCameraPtr, Camera *, pSceneModuleDef );
 	AddMemFnToMod( Scene, GetLoopManagerPtr, LoopManager *, pSceneModuleDef );
+	AddMemFnToMod( Scene, GetDrawable, Drawable *, pSceneModuleDef, size_t );
 }

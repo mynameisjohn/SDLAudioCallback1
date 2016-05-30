@@ -165,4 +165,6 @@ void Drawable::Draw()
 
 	pDrawableModDef->RegisterFunction<struct st_fnDrSetPosH>( "SetPosHandle", pyl::make_function( Drawable::SetPosHandle ) );
 	pDrawableModDef->RegisterFunction<struct st_fnDrSetClrH>( "SetColorHandle", pyl::make_function( Drawable::SetColorHandle ) );
+
+	AddMemFnToMod( Drawable, SetColor, void, pDrawableModDef, vec4 );
 }

@@ -93,7 +93,7 @@ class LoopState(StateGraph.State):
     # and activates the generating loop sequences, which are
     # deactivated when the context exits (thanks contextlib)
     @contextlib.contextmanager
-    def Activate(self, G, prevState):
+    def Activate(self, SG, prevState):
         if prevState is None:
             print('Entering State', self)
         else:

@@ -6,7 +6,9 @@ import copy
 import networkx as nx
 import random
 import math
+import contextlib
 
+# pyl modules
 import pylLoopManager as pylLM
 import pylSDLKeys as pylSDLK
 import pylScene
@@ -51,6 +53,18 @@ def LoopCoroutine(SG):
 
         # At every iteration, advance the graph state
         sNext = SG.GetNextState()
+        # Otherwise, build up the change set based on the
+        # advancement of the active state's loop sequences
+        for loopName in cData.setStartedLoops:
+            #print('We\'re being told', loopName, 'has stared')
+            # Search the active state's loop sequences
+            # for this loop (which we better find)
+            for lSeq in sA.diLoopSequences.values():
+                # If we found it
+                if any(loopName == l.name for l in lSeq.loops):
+                    D = pylDrawable.Drawable(SG.cScene.GetDrawable(sA.drIdx))
+                    D.SetColor([0., 1., 0., 1.])
+                    break
 
         # If the state changed, 
         if sNext is not sA:
@@ -86,6 +100,34 @@ def LoopCoroutine(SG):
         curSet = set(sA.GetActiveLoopGen())
         changes = ChangeSet(prevSet - curSet, curSet - prevSet)
 
+class MyLoopState(LoopState):
+    def __init__(self, *args):
+        LoopState.__init__(self, *args)
+        self.drIdx = None
+
+    def SetDrawableIdx(self, drIdx):
+        self.drIdx = drIdx
+
+    @contextlib.contextmanager
+    def Activate(self, SG, prevState):
+        self.bActive = True
+        if self.drIdx is not None:
+            D = pylDrawable.Drawable(SG.cScene.GetDrawable(self.drIdx))
+            D.SetColor([1., 0., 0., 1.])
+
+        # add each seq's context to an exit stack
+        with contextlib.ExitStack() as LoopSeqIterStack:
+            # These will be exited when we exit
+            for lsName in self.diLoopSequences.keys():
+                LoopSeqIterStack.enter_context(self.diLoopSequences[lsName].Activate())
+            yield
+
+        if self.drIdx is not None:
+            D = pylDrawable.Drawable(SG.cScene.GetDrawable(self.drIdx))
+            D.SetColor([1., 1., 1., 1.])
+
+        self.bActive = False
+
 # Function to create state graph
 def CreateStateGraph():
     # Create the states (these three sequences are common to all)
@@ -94,21 +136,21 @@ def CreateStateGraph():
     lSeq_drums = LoopSequence('drums',[Loop('drum', 'drum1_head.wav', 5, 1.,'drum1_tail.wav')])
 
     # State 1 just plays lead1, lead2, lead1, lead2...
-    s1 = LoopState('One', {lSeq_chSustain, lSeq_bass, lSeq_drums,
+    s1 = MyLoopState('One', {lSeq_chSustain, lSeq_bass, lSeq_drums,
         LoopSequence('lead',[
             Loop('lead1', 'lead1.wav'),
             Loop('lead2', 'lead2_head.wav', 5, 1.,'lead2_tail.wav')], itertools.cycle)
     })
 
     # State 2 just plays lead3, lead4, lead3, lead4...
-    s2 = LoopState('Two', {lSeq_chSustain, lSeq_bass, lSeq_drums,
+    s2 = MyLoopState('Two', {lSeq_chSustain, lSeq_bass, lSeq_drums,
         LoopSequence('lead',[
             Loop('lead3', 'lead3.wav'),
             Loop('lead4', 'lead4.wav')], itertools.cycle)
     })
 
     # State 3 plays lead5, lead6, lead7, lead7...
-    s3 = LoopState('Three', {lSeq_chSustain, lSeq_bass, lSeq_drums, 
+    s3 = MyLoopState('Three', {lSeq_chSustain, lSeq_bass, lSeq_drums, 
         LoopSequence('lead',[
             Loop('lead5', 'lead5.wav'),
             Loop('lead6', 'lead6.wav'),
@@ -254,10 +296,16 @@ def InitScene(pScene):
     pylDrawable.SetColorHandle(cShader.GetHandle('u_Color'))
 
     global g_SG
+    g_SG.cScene = cScene
     nodes = g_SG.G.nodes()
     dTH = 2 * math.pi / len(nodes)
-    for i in range(len(nodes)):
-        th = i * dTH - math.pi/2
-        cScene.AddDrawable('quad.iqm', [camDim[0]*math.cos(th)/2, camDim[0]*math.sin(th)/2], [1., 1.], [1., 1., 1., 1.])
+    for drIdx in range(len(nodes)):
+        if g_SG.activeState is nodes[drIdx]:
+            clr = [1., 0., 0., 1.]
+        else:
+            clr = [1., 1., 1., 1.]
+        th = drIdx * dTH - math.pi/2
+        if cScene.AddDrawable('quad.iqm', [camDim[0]*math.cos(th)/2, camDim[0]*math.sin(th)/2], [1., 1.], clr):
+            nodes[drIdx].drIdx = drIdx
 
     cShader.Unbind()

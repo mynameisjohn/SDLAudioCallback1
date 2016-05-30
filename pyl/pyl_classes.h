@@ -242,6 +242,8 @@ namespace pyl
 		*/
 		static Object from_script(const std::string &script_path);
 
+		void Reset();
+
 	protected:
 		typedef std::shared_ptr<PyObject> pyshared_ptr;
 

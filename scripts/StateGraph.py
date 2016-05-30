@@ -20,7 +20,7 @@ class State(abc.ABC):
 
     @abc.abstractmethod
     @contextlib.contextmanager
-    def Activate(self, G, prevState):
+    def Activate(self, SG, prevState):
         yield
 
 # A graph of states, edges denote possible transitions
@@ -41,7 +41,7 @@ class StateGraph:
 
             while True:
                 self.activeState = nextState
-                with self.activeState.Activate(self.G, prevState):
+                with self.activeState.Activate(self, prevState):
                     while nextState is self.activeState:
                         yield self.activeState
                         nextState = self._fnAdvance(self)
