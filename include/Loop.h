@@ -59,5 +59,9 @@ public:
 
 	// The sample count of the head buffer
 	size_t GetNumSamples( bool bTail = false ) const;
+
+	// PYL stuff
+	static const std::string strModuleName;
+	static void pylExpose();
 };
 

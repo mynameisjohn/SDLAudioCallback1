@@ -12,6 +12,7 @@
 #include "Camera.h"
 #include "Shader.h"
 #include "Scene.h"
+#include <memory>
 
 bool pylExpose()
 {
@@ -45,7 +46,11 @@ int main(int argc, char ** argv)
 	pylExpose();
 	pyl::Object obDriverModule = pyl::Object::from_script( "../scripts/driver.py" );
 
-	Scene S( obDriverModule );
+	std::unique_ptr<Scene> pScene;
+	try
+	{
+		pScene = std::unique_ptr<Scene>( new Scene( obDriverModule ) );
+
 
 	// This condition should be event based
 	bool bContinue = true;
@@ -71,9 +76,14 @@ int main(int argc, char ** argv)
 				obDriverModule.call_function( "HandleKey", (int) kc, e.type == SDL_KEYDOWN );
 			}
 		}
-		S.Update();
-		S.Draw();
+		pScene->Update();
+		pScene->Draw();
 	}
 
 	return 0;
+	}
+	catch ( std::runtime_error )
+	{
+		return -1;
+	}
 }

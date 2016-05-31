@@ -7,16 +7,7 @@ Scene::Scene( pyl::Object obInitScript ) :
 	m_pWindow( nullptr ),
 	m_obDriverScript( obInitScript )
 {
-	try
-	{
-		m_obDriverScript.call_function( "InitScene", this );
-	}
-	catch ( std::runtime_error )
-	{
-		m_GLContext = nullptr;
-		m_pWindow = nullptr;
-		m_obDriverScript.Reset();
-	}
+	m_obDriverScript.call_function( "InitScene", this );
 }
 
 Scene::~Scene()
@@ -59,7 +50,14 @@ void Scene::Draw()
 
 void Scene::Update()
 {
-	m_LoopManager.Update( m_obDriverScript );
+	size_t uCompletedBuffers (0);
+	if ( m_LoopManager.GetNumBuffersCompleted( &uCompletedBuffers ) )
+	{
+		pyl::Object obPyLoopGraph = m_obDriverScript.get_attr( "g_LoopGraph" );
+		obPyLoopGraph.call_function( "UpdateSamplePos", uCompletedBuffers );
+	}
+
+	m_obDriverScript.call_function( "Update", this );
 }
 
 bool Scene::InitDisplay( int glMajor, int glMinor, int iScreenW, int iScreenH, vec4 v4ClearColor )

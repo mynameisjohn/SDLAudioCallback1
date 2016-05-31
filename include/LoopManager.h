@@ -34,8 +34,9 @@ public:
 		// These commands are sent from the audio thread to
 		// anyone who cares, used right now to queue up
 		// new loops (which is a pain in the ass)
-		LoopLaunched,
-		LongestLoopCompleted
+		//LoopLaunched,
+		//LongestLoopCompleted
+		BufCompleted
 	};
 
 	// Generic tasks object used to queue actions
@@ -81,7 +82,7 @@ public:
 	LoopManager( SDL_AudioSpec sdlAudioSpec );
 
 	// Called periodically to pump python script
-	void Update(pyl::Object& driverScript);
+	bool GetNumBuffersCompleted( size_t * pNumBufs );
 
 	bool Configure( std::map<std::string, int> mapAudCfg );
 	bool Start();
@@ -90,6 +91,7 @@ public:
 	size_t GetMaxSampleCount() const;
 	size_t GetSampleRate() const;
 	size_t GetBufferSize() const;
+	Loop * GetLoop( std::string strLoopName ) const;
 
 	// Called from python to add tasks to public queue
 	bool SendMessage( Message M );

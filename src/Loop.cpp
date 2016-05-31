@@ -1,6 +1,7 @@
 #include "Loop.h"
 
 #include <algorithm>
+#include <pyliason.h>
 
 // remaps x : [m0, M0] to the range of [m1, M1]
 inline float remap( float x, float m0, float M0, float m1, float M1 )
@@ -369,4 +370,18 @@ void Loop::SetStopping( size_t uTriggerRes )
 	// Should we update this no matter what?
 	// I'm really not sure
 	m_uTriggerResolution = uTriggerRes;
+}
+
+// Expose the LM class and some functions
+const std::string Loop::strModuleName = "pylLoop";
+/*static*/ void Loop::pylExpose()
+{
+	using pyl::ModuleDef;
+	ModuleDef * pLoopModDef = ModuleDef::CreateModuleDef<struct st_LoopModule>( Loop::strModuleName );
+	if ( pLoopModDef == nullptr )
+		return;
+
+	pLoopModDef->RegisterClass<Loop>( "Loop" );
+
+	AddMemFnToMod( Loop, GetNumSamples, size_t, pLoopModDef, bool );
 }

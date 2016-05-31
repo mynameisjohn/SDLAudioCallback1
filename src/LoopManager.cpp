@@ -11,8 +11,7 @@ struct prIsTaskFromAudioThread
 	{
 		switch ( T.eCmdID )
 		{
-			case LoopManager::Command::LongestLoopCompleted:
-			case LoopManager::Command::LoopLaunched:
+			case LoopManager::Command::BufCompleted:
 				return true;
 
 		}
@@ -183,49 +182,69 @@ LoopManager::Task LoopManager::translateMessage( Message& M )
 
 // Kind of an expensive function at the moment; 
 // Takes a reference to the driver script
-void LoopManager::Update( pyl::Object& obDriverScript )
+bool LoopManager::GetNumBuffersCompleted( size_t * pNumBufs )
 {
-	// Take any tasks the audio thread has left us
-	// and put them in a new list on the stack
-	std::list<Task> liNewTaskList;
+	if ( pNumBufs == nullptr )
+		return false;
+
+	// We gotta lock this while we mess with the public queue
+	std::lock_guard<std::mutex> lg( m_muAudioMutex );
+
+	// Get out if empty
+	if ( m_liPublicTaskQueue.empty() )
+		return false;
+
+	bool bRet = false;
+
+	*pNumBufs += std::count_if( m_liPublicTaskQueue.begin(), m_liPublicTaskQueue.end(), [] ( const Task T )
 	{
-		// We gotta lock this while we mess with the public queue
-		std::lock_guard<std::mutex> lg( m_muAudioMutex );
+		return T.eCmdID == Command::BufCompleted;
+	} );
 
-		// This is actually kind of expensive... but whatever
-		auto itFromAudThread = std::remove_if( m_liPublicTaskQueue.begin(), m_liPublicTaskQueue.end(), prIsTaskFromAudioThread() );
-		liNewTaskList.splice( liNewTaskList.end(), m_liPublicTaskQueue, itFromAudThread, m_liPublicTaskQueue.end() );
-	}
+	m_liPublicTaskQueue.erase( std::remove_if( m_liPublicTaskQueue.begin(), m_liPublicTaskQueue.end(), prIsTaskFromAudioThread() ), m_liPublicTaskQueue.end() );
 
-	// This could be a class member, but I feel like that's python's job
-	// The only concern is if it's out of date... anyway
-	// Send python the number of loops that have occurred (based on LongestLoopCompleted tasks)
-	// As well as a set of loops that have just started
-	// I think that's pretty dumb, what I'd like to do is send current sample pos and figure out
-	// what to queue up based on that, but right now this was easy
-	size_t uLoopsCompleted( 0 );
-	std::set<std::string> setLoopsStarted;
-	
-	// Handle each new task
-	for ( auto T : liNewTaskList )
-	{
-		switch ( T.eCmdID )
-		{
-			case Command::LoopLaunched:
-				if ( setLoopsStarted.count( T.pLoop->GetName() ) )
-					throw std::runtime_error( "More than one loop passed!" );
-				setLoopsStarted.insert( T.pLoop->GetName() );
-				break;
-			case Command::LongestLoopCompleted:
-				uLoopsCompleted++;
-				break;
-			default:
-				break;
-		}
-	}
+	return *pNumBufs > 0;
 
-	// Let the python script know what's going on
-	obDriverScript.call_function( "Update", this, uLoopsCompleted, setLoopsStarted );
+	//// Take any tasks the audio thread has left us
+	//// and put them in a new list on the stack
+	//std::list<Task> liNewTaskList;
+	//{
+
+
+	//	// This is actually kind of expensive... but whatever
+	//	auto itFromAudThread = std::remove_if( m_liPublicTaskQueue.begin(), m_liPublicTaskQueue.end(), prIsTaskFromAudioThread() );
+	//	liNewTaskList.splice( liNewTaskList.end(), m_liPublicTaskQueue, itFromAudThread, m_liPublicTaskQueue.end() );
+	//}
+
+	//// This could be a class member, but I feel like that's python's job
+	//// The only concern is if it's out of date... anyway
+	//// Send python the number of loops that have occurred (based on LongestLoopCompleted tasks)
+	//// As well as a set of loops that have just started
+	//// I think that's pretty dumb, what I'd like to do is send current sample pos and figure out
+	//// what to queue up based on that, but right now this was easy
+	//size_t uLoopsCompleted( 0 );
+	//std::set<std::string> setLoopsStarted;
+	//
+	//// Handle each new task
+	//for ( auto T : liNewTaskList )
+	//{
+	//	switch ( T.eCmdID )
+	//	{
+	//		case Command::LoopLaunched:
+	//			if ( setLoopsStarted.count( T.pLoop->GetName() ) )
+	//				throw std::runtime_error( "More than one loop passed!" );
+	//			setLoopsStarted.insert( T.pLoop->GetName() );
+	//			break;
+	//		case Command::LongestLoopCompleted:
+	//			uLoopsCompleted++;
+	//			break;
+	//		default:
+	//			break;
+	//	}
+	//}
+
+	//// Let the python script know what's going on
+	//obDriverScript.call_function( "Update", this, uLoopsCompleted, setLoopsStarted );
 }
 
 // Called by audio thread
@@ -251,6 +270,11 @@ void LoopManager::updateTaskQueue()
 			auto itFromAudThread = std::remove_if( m_liAudioTaskQueue.begin(), m_liAudioTaskQueue.end(), prIsTaskFromAudioThread() );
 			m_liPublicTaskQueue.splice( m_liPublicTaskQueue.end(), m_liAudioTaskQueue, itFromAudThread, m_liAudioTaskQueue.end() );
 		}
+
+		// Task indicating that buffer completed
+		Task bufCompletedTask;
+		bufCompletedTask.eCmdID = Command::BufCompleted;
+		m_liPublicTaskQueue.push_back( bufCompletedTask );
 	}
 
 	// Handle each task
@@ -318,26 +342,27 @@ void LoopManager::fill_audio_impl( Uint8 * pStream, int nBytesToFill )
 		// Get audio data, 
 		// detect if any loops are going from pending to starting this iteration
 		Loop& l = itLoop.second;
-
-		// We may want to post a message indicating that this loop has started over - first check boundaries
-		bool bPostMessage = ((m_uSamplePos % l.GetNumSamples()) + uNumSamplesDesired > l.GetNumSamples());
-
-		Loop::State eInitialState = l.GetState();
 		l.GetData( (float *) pStream, uNumSamplesDesired, m_uSamplePos );
-		Loop::State eFinalState = l.GetState();
 
-		// We'd also like to post a message if it just went from pending to starting, but not if it's stopped or tailing now
-		bPostMessage = bPostMessage || (eInitialState == Loop::State::Pending && eFinalState == Loop::State::Starting);
-		bPostMessage = bPostMessage && (l.GetState() != Loop::State::Stopped && l.GetState() != Loop::State::Tail);
+		//// We may want to post a message indicating that this loop has started over - first check boundaries
+		//bool bPostMessage = ((m_uSamplePos % l.GetNumSamples()) + uNumSamplesDesired > l.GetNumSamples());
 
-		// Create the task, it will make it back to the public queue next call
-		if ( bPostMessage )
-		{
-			Task T;
-			T.pLoop = &l;
-			T.eCmdID = Command::LoopLaunched;
-			m_liAudioTaskQueue.push_back( T );
-		}
+		//Loop::State eInitialState = l.GetState();
+		//l.GetData( (float *) pStream, uNumSamplesDesired, m_uSamplePos );
+		//Loop::State eFinalState = l.GetState();
+
+		//// We'd also like to post a message if it just went from pending to starting, but not if it's stopped or tailing now
+		//bPostMessage = bPostMessage || (eInitialState == Loop::State::Pending && eFinalState == Loop::State::Starting);
+		//bPostMessage = bPostMessage && (l.GetState() != Loop::State::Stopped && l.GetState() != Loop::State::Tail);
+
+		//// Create the task, it will make it back to the public queue next call
+		//if ( bPostMessage )
+		//{
+		//	Task T;
+		//	T.pLoop = &l;
+		//	T.eCmdID = Command::LoopLaunched;
+		//	m_liAudioTaskQueue.push_back( T );
+		//}
 	}
 
 	// Update sample counter, reset if we went over
@@ -350,9 +375,9 @@ void LoopManager::fill_audio_impl( Uint8 * pStream, int nBytesToFill )
 		// We also want to post a message indicating that the 
 		// longest loop has completed... unfortunately this won't be posted
 		// until the next call to updateTaskQueue
-		Task T;
-		T.eCmdID = Command::LongestLoopCompleted;
-		m_liAudioTaskQueue.push_back( T );
+		//Task T;
+		//T.eCmdID = Command::LongestLoopCompleted;
+		//m_liAudioTaskQueue.push_back( T );
 	}
 }
 
@@ -382,6 +407,14 @@ size_t LoopManager::GetBufferSize() const
 size_t LoopManager::GetMaxSampleCount() const
 {
 	return m_uMaxSampleCount;
+}
+
+Loop * LoopManager::GetLoop( std::string strLoopName ) const
+{
+	auto it = m_mapLoops.find( strLoopName );
+	if ( it != m_mapLoops.end() )
+		return (Loop *) &it->second;
+	return nullptr;
 }
 
 bool LoopManager::Configure( std::map<std::string, int> mapAudCfg )
@@ -440,6 +473,8 @@ const std::string LoopManager::strModuleName = "pylLoopManager";
 	AddMemFnToMod( LoopManager, SendMessage, bool, pLoopManagerDef, LoopManager::Message );
 	AddMemFnToMod( LoopManager, GetSampleRate, size_t, pLoopManagerDef );
 	AddMemFnToMod( LoopManager, GetMaxSampleCount, size_t, pLoopManagerDef );
+	AddMemFnToMod( LoopManager, GetBufferSize, size_t, pLoopManagerDef );
+	AddMemFnToMod( LoopManager, GetLoop, Loop *, pLoopManagerDef, std::string );
 	AddMemFnToMod( LoopManager, Configure, bool, pLoopManagerDef, std::map<std::string, int> );
 	AddMemFnToMod( LoopManager, Start, bool, pLoopManagerDef );
 
@@ -454,7 +489,7 @@ const std::string LoopManager::strModuleName = "pylLoopManager";
 		obModule.set_attr( "CMDPause", (int) Command::Pause );
 	} );
 
-	pLoopManagerDef->RegisterClass<Loop>( "Loop" );
+	Loop::pylExpose();
 
 	return true;
 }
