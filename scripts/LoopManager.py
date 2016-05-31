@@ -1,86 +1,136 @@
-from LoopGraph import LoopState, LoopSequence, Loop
-from StateGraph import StateGraph
-import pylLoopManager as pylLM
-import pylLoop
-import pylSDLKeys as pylSDLK
-import pylDrawable
 import contextlib
 import random
 import itertools
 import networkx as nx
 
+# I know this is confusing... I have so many classes that
+# have the word loop in their name. It's dumb
+from LoopGraph import LoopState, LoopSequence, Loop
+from StateGraph import StateGraph
+
+# pyl modules
+import pylLoopManager as pylLM
+import pylLoop
+import pylSDLKeys as pylSDLK
+import pylDrawable
+
 # Cartesian product
 def dot(A, B):
     return sum(a * b for a, b in itertools.zip_longest(A, B, fillvalue = 0))
 
+# StateGraph override (should I just have it own a StateGraph?)
 class LoopGraph(StateGraph):
+    # Init takes the C++ LoopManager instance, an initial stim,
+    # a map of keycodes to stimuli, and the stategraph args
     def __init__(self, LM, initialStim, keyDict, *args):
+        # Call the base constructor
         StateGraph.__init__(self, *args)
+
+        # Lots of things to store
         self.LM = LM
         self.stim = initialStim
         self.keyDict = keyDict
+
+        # These sets are used to determine what to turn
+        # on and off during Update
         self.prevSet = set()
         self.curSet = set()
+
+        # The current sample pos is incremented by
+        # the curSamplePos inc, which is a multiple of
+        # the loop manager's bufsize (every buf adds to inc)
         self.curSamplePos = 0
         self.curSamplePosInc = 0
         self.totalLoopCount = 0
+
+        # the preTrigger is the number of samples before
+        # the expected loop duration at which we send a state
+        # change (we wait as long as possible.) 
         self.preTrigger = LM.GetBufferSize()
+
+        # nextState is purely used for drawing pending states
         self.nextState = self._fnAdvance(self)
 
+    # Confusing function name... the sample pos should only go
+    # up by a multiple of the lm's buffer size, so pass in
+    # the number of buffers that have been rendered since last time
     def UpdateSamplePos(self, numBufs):
         self.curSamplePosInc += numBufs * self.LM.GetBufferSize()
 
+    # If the keycode is one of ours, set the stimulus
+    # (but don't change state yet)
     def HandleInput(self, key):
         if key in self.keyDict.keys():
             self.stim = self.keyDict[key]
+
     # Presumably when this is called, the HandleInput
     # or SetSamplePos functions have had their input and
     # the update function is ready to determine where to go
     # That means the update function must be able to use either
     # the keyboard stim or the sample pos to advance loops
+
+    # Called every frame, looks at the current stimulus and
+    # sample position and determines if either the graph state
+    # should advance or if the active loop sequences should advance
     def Update(self):
+        # Determine the next state, but don't advance
         nextState = self._fnAdvance(self)
+
+        # If the pending state is changing
         if nextState is not self.nextState:
+            # Set the original pending state's color to off (if not active)
             if self.nextState is not self.activeState:
-                D = pylDrawable.Drawable(self.cScene.GetDrawable(self.nextState.drIdx))
-                D.SetColor(MyLoopState.clrOff)
+                self.nextState.SetDrColor(self.cScene, MyLoopState.clrOff)
+            # Set the new pending state's color to pending (if not active)
             if nextState is not self.activeState:
-                D = pylDrawable.Drawable(self.cScene.GetDrawable(nextState.drIdx))
-                D.SetColor(MyLoopState.clrPending)
+                nextState.SetDrColor(self.cScene, MyLoopState.clrPending)
+            # Update next state
             self.nextState = nextState
-            
-        bAnythingDone = False
+        
+        # Compute the new sample pos, zero inc, don't update yet
         newSamplePos = self.curSamplePos + self.curSamplePosInc
         self.curSamplePosInc = 0
 
+        # Store the previous set of loops sent to the LM
         self.prevSet = set(self.activeState.GetActiveLoopGen())
+
+        # We get out early if there's nothing to do
+        bAnythingDone = False
         
+        # If the next state isn't the active state
         if self.nextState is not self.activeState:
+            # Determine if we should advance the graph state
             trig = self.activeState.triggerRes - self.preTrigger
             if self.curSamplePos < trig and newSamplePos >= trig:
+                # Advance graph
                 self.GetNextState()
                 bAnythingDone = True
         else:
-            bAny = False
+            # Determine if we should advance the active loop seq
             for lSeq in self.activeState.diLoopSequences.values():
                 loopTrig = lSeq.activeLoop.cLoop.GetNumSamples(False) - self.preTrigger
                 if self.curSamplePos < loopTrig and newSamplePos >= loopTrig:
+                    # Advance sequence
                     lSeq.AdvanceActiveLoop()
                     bAnythingDone = True
 
+        # Update sample pos, maybe reset
         self.curSamplePos = newSamplePos
-                        
+        if self.curSamplePos >= self.LM.GetMaxSampleCount():
+            self.curSamplePos = 0
+        
+        # If no loop changes, get out
         if bAnythingDone == False:
             return
-        else:
-            self.curSamplePos = 0
 
+        # Compute the sets of loop changes (do I need to store curSet?)
         self.curSet = set(self.activeState.GetActiveLoopGen())
         setToTurnOn = self.curSet - self.prevSet
         setToTurnOff = self.prevSet - self.curSet
-        print('on', setToTurnOn)
-        print('off', setToTurnOff)
-        
+#        print('on', setToTurnOn)
+#        print('off', setToTurnOff)
+
+        # Send a message list to the LM        
         messageList = []
         for turnOff in setToTurnOff:
             messageList.append((pylLM.CMDStopLoop, (turnOff.name, self.activeState.triggerRes)))
@@ -90,11 +140,13 @@ class LoopGraph(StateGraph):
         if len(messageList) > 0:
             self.LM.SendMessages(messageList)
 
+# LoopState override, just handles color changing
 class MyLoopState(LoopState):
     clrOff = [1., 0., 0., 1.]
     clrPending = [1., 1., 0., 1.]
     clrPlaying = [0., 1., 0., 1.]
 
+    # The only difference is we cache a drawable index
     def __init__(self, *args):
         LoopState.__init__(self, *args)
         self.drIdx = None
@@ -102,12 +154,17 @@ class MyLoopState(LoopState):
     def SetDrawableIdx(self, drIdx):
         self.drIdx = drIdx
 
+    # Use the cached drawable index to update the color
+    def UpdateDrColor(self, cScene):
+        D = pylDrawable.Drawable(cScene.GetDrawable(self.drIdx))
+        D.SetColor(MyLoopState.clrPlaying)
+
+    # Activate override, sets color of drawable
     @contextlib.contextmanager
     def Activate(self, SG, prevState):
         self.bActive = True
         if self.drIdx is not None:
-            D = pylDrawable.Drawable(SG.cScene.GetDrawable(self.drIdx))
-            D.SetColor(MyLoopState.clrPlaying)
+            self.UpdateDrColor(SG.cScene, MyLoopState.clrPlaying)
 
         # add each seq's context to an exit stack
         with contextlib.ExitStack() as LoopSeqIterStack:
@@ -116,9 +173,9 @@ class MyLoopState(LoopState):
                 LoopSeqIterStack.enter_context(self.diLoopSequences[lsName].Activate())
             yield
 
+        # Set color to off
         if self.drIdx is not None:
-            D = pylDrawable.Drawable(SG.cScene.GetDrawable(self.drIdx))
-            D.SetColor(MyLoopState.clrOff)
+            self.UpdateDrColor(SG.cScene, MyLoopState.clrOff)
 
         self.bActive = False
 
@@ -183,7 +240,7 @@ def CreateLoopGraph(LM):
     return LoopGraph(LM, edgeDict[s1], keyDict, G, fnAdvance, s1)
 
 def InitLoopManager(cScene):
-    # Create LM
+    # Create LM wrapper
     LM = pylLM.LoopManager(cScene.GetLoopManagerPtr())
 
     # Init audio spec
@@ -200,6 +257,7 @@ def InitLoopManager(cScene):
 
     # For each loop in the state's loop sequences
     for loopState in loopGraph.G.nodes_iter():
+        # The state's trigger res is its longest loop
         loopState.triggerRes = 0
         for lSeq in loopState.diLoopSequences.values():
             for l in lSeq.loops:
@@ -220,8 +278,10 @@ def InitLoopManager(cScene):
     # Start the active loop seq
     messageList = [(pylLM.CMDStartLoop, (l.name, 0)) for l in loopGraph.GetActiveState().GetActiveLoopGen()]
     LM.SendMessages(messageList)
-    
+   
+    # Start SDL Audio 
     if LM.Start() == False:
         raise RuntimeError('Error opening SDL audio device')
 
+    # Return the graph instance
     return loopGraph
