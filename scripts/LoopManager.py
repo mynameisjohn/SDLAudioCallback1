@@ -80,10 +80,10 @@ class LoopGraph(StateGraph):
         if nextState is not self.nextState:
             # Set the original pending state's color to off (if not active)
             if self.nextState is not self.activeState:
-                self.nextState.SetDrColor(self.cScene, MyLoopState.clrOff)
+                self.nextState.UpdateDrColor(self.cScene, MyLoopState.clrOff)
             # Set the new pending state's color to pending (if not active)
             if nextState is not self.activeState:
-                nextState.SetDrColor(self.cScene, MyLoopState.clrPending)
+                nextState.UpdateDrColor(self.cScene, MyLoopState.clrPending)
             # Update next state
             self.nextState = nextState
         
@@ -155,9 +155,9 @@ class MyLoopState(LoopState):
         self.drIdx = drIdx
 
     # Use the cached drawable index to update the color
-    def UpdateDrColor(self, cScene):
+    def UpdateDrColor(self, cScene, C):
         D = pylDrawable.Drawable(cScene.GetDrawable(self.drIdx))
-        D.SetColor(MyLoopState.clrPlaying)
+        D.SetColor(C)
 
     # Activate override, sets color of drawable
     @contextlib.contextmanager

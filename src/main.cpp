@@ -43,47 +43,32 @@ bool pylExpose()
 int main(int argc, char ** argv)
 {
 	// Load up the driver module and init the loopmanager
-	pylExpose();
-	pyl::Object obDriverModule = pyl::Object::from_script( "../scripts/driver.py" );
+	if ( pylExpose() == false )
+		return EXIT_FAILURE;
 
-	std::unique_ptr<Scene> pScene;
 	try
 	{
-		pScene = std::unique_ptr<Scene>( new Scene( obDriverModule ) );
+		pyl::Object obDriverModule = pyl::Object::from_script( "../scripts/driver.py" );
+		Scene S( obDriverModule );
 
-
-	// This condition should be event based
-	bool bContinue = true;
-	while ( bContinue )
-	{
-		SDL_Event e;
-		while ( SDL_PollEvent( &e ) )
+		// This condition should be event based
+		bool bContinue = true;
+		while ( bContinue )
 		{
-			if ( e.type == SDL_QUIT )
-				bContinue = false;
-
-			// We only care about the keyboard for now
-			else if ( e.type == SDL_KEYDOWN || e.type == SDL_KEYUP )
+			SDL_Event e;
+			while ( SDL_PollEvent( &e ) && bContinue )
 			{
-				SDL_Keycode kc = e.key.keysym.sym;
-				if ( kc == SDLK_ESCAPE )
-				{
-					bContinue = false;
-					continue;
-				}
-
-				// These could be stored and sent in one go
-				obDriverModule.call_function( "HandleKey", (int) kc, e.type == SDL_KEYDOWN );
+				obDriverModule.call_function( "HandleEvent", &e ).convert( bContinue );
 			}
-		}
-		pScene->Update();
-		pScene->Draw();
-	}
 
-	return 0;
+			S.Update();
+			S.Draw();
+		}
+
+		return EXIT_SUCCESS;
 	}
 	catch ( std::runtime_error )
 	{
-		return -1;
+		return EXIT_FAILURE;
 	}
 }

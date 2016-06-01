@@ -13,6 +13,17 @@ from LoopGraph import LoopState, LoopSequence, Loop
 from StateGraph import StateGraph
 from LoopManager import *
 
+import sys, os
+sys.path.append(os.path.dirname(os.path.realpath(__file__))+'/sdl2')
+import events as SDLEvents
+import keycode as SDLK
+
+import ctypes
+def convert_capsule_to_int(capsule):
+    ctypes.pythonapi.PyCapsule_GetPointer.restype = ctypes.c_void_p
+    ctypes.pythonapi.PyCapsule_GetPointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+    return ctypes.pythonapi.PyCapsule_GetPointer(capsule, None)
+
 # Global loopgraph instance
 # I don't like having globals, but the buck
 # stops somewhere I guess. Maybe I can add it
@@ -90,12 +101,25 @@ def InitScene(pScene):
 # Called every frame from C++
 def Update(pScene):
     # Right now this just updates the loop graph
+    global g_LoopGraph
     g_LoopGraph.Update()
 
-# Right now just send every keydown to the graph
-# so it can determine if a state change is coming
-def HandleKey(keyCode, bIsKeyDown):
-    # If it's not a keydown, it's a keyup
-    if not bIsKeyDown:
+# rudimentary input handling function
+def HandleEvent(pEvent):
+    # cast pointer to SDL event as ctype struct
+    h = convert_capsule_to_int(pEvent)
+    e = SDLEvents.SDL_Event.from_address(h)
+
+    # This is a proof of concept...
+    def HandleKeyUp(e):
         global g_LoopGraph
-        g_LoopGraph.HandleInput(keyCode)
+        sym = e.key.keysym.sym
+        if sym == SDLK.SDLK_ESCAPE:
+            return False
+        g_LoopGraph.HandleInput(sym)
+        return True
+
+    inputDict = {SDLEvents.SDL_KEYUP:HandleKeyUp,}
+
+    if e.type in inputDict.keys():
+        return inputDict[e.type](e)
