@@ -32,6 +32,7 @@ def convert_capsule_to_int(capsule):
 # to a pyl module somehow, but that won't help
 g_LoopGraph = None
 
+# Initialize the input manager
 def InitInputManager(pScene):
     cScene = pylScene.Scene(pScene)
 
@@ -39,27 +40,26 @@ def InitInputManager(pScene):
     def fnEscapeKey(btn, keyMgr):
         nonlocal cScene
         cScene.SetQuitFlag(True)
-    btnEscapeKey = InputManager.Button(SDLK.SDLK_ESCAPE, fnUp = fnEscapeKey)
+    btnEscapeKey = InputManager.Button(SDLK.SDLK_ESCAPE, None, fnEscapeKey)
 
     # The space key callback tells the loop manager to play/pause
     def fnSpaceKey(btn, keyMgr):
         nonlocal cScene
         LM = pylLM.LoopManager(cScene.GetLoopManagerPtr())
         LM.PlayPause()
-    btnSpaceKey = InputManager.Button(SDLK.SDLK_SPACE, fnUp = fnSpaceKey)
+    btnSpaceKey = InputManager.Button(SDLK.SDLK_SPACE, None, fnSpaceKey)
 
     # Create Key Manager
     keyMgr = InputManager.KeyboardManager((btnEscapeKey, btnSpaceKey))
 
     # I don't know what to do with the mouse yet...
     def fnMouseClick(btn, mouseMgr):
-        global cScene
         if btn.code is SDLEvents.SDL_BUTTON_RIGHT:
             print('Right Button up at', mouseMgr.mousePos)
         if btn.code is SDLEvents.SDL_BUTTON_LEFT:
             print('Left Button up at', mouseMgr.mousePos)
-    btnRMouseClick = InputManager.Button(SDLEvents.SDL_BUTTON_RIGHT, fnUp = fnMouseClick)
-    btnLMouseClick = InputManager.Button(SDLEvents.SDL_BUTTON_LEFT, fnUp = fnMouseClick)
+    btnRMouseClick = InputManager.Button(SDLEvents.SDL_BUTTON_RIGHT, None, fnMouseClick)
+    btnLMouseClick = InputManager.Button(SDLEvents.SDL_BUTTON_LEFT, None, fnMouseClick)
 
     mouseMgr = InputManager.MouseManager((btnRMouseClick, btnLMouseClick))
 

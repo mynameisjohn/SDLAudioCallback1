@@ -4,53 +4,71 @@ import events as SDLEvents
 import keycode as SDLK
 
 class Button:
-    def __init__(self, code, *args, **kwargs):
+    def __init__(self, code, fnDown, fnUp):
+        # code should be hashable... should I have __hash__?
         self.code = code
-
-        self.fnUp = None
-        if 'fnUp' in kwargs.keys():
-            if hasattr(kwargs['fnUp'], '__call__'):
-                self.fnUp = kwargs['fnUp']
+        self.state = False
 
         self.fnDown = None
-        if 'fnDown' in kwargs.keys():
-            if hasattr(kwargs['fnDown'], '__call__'):
-                self.fnDown = fnDown
+        if hasattr(fnDown, '__call__'):
+            self.fnDown = fnDown
 
-        self.state = False
-        if 'state' in kwargs.keys():
-            self.state = bool(kwargs['state'])
+        self.fnUp = None
+        if hasattr(fnUp, '__call__'):
+            self.fnUp = fnUp
 
-    def Press(self, mgr):
-        self.state = True
-        if self.fnDown is not None:
+    def Toggle(self, mgr):
+        oldState = self.state
+        self.state = not(self.state)
+        if oldState == False and self.fnDown is not None:
             self.fnDown(self, mgr)
-
-    def Release(self, mgr):
-        self.state = False
-        if self.fnUp is not None:
+        elif oldState and self.fnUp is not None:
             self.fnUp(self, mgr)
 
 class KeyboardManager:
     def __init__(self, liKeys):
+        if not(all(isinstance(k, Button) for k in liKeys)):
+            raise TypeError('Error: All keys registered must be Buttons')
+
+        # diKeys is initialized with the registered buttons
+        # but will store bools for unregistered keys
         self.diKeys = {k.code : k for k in liKeys}
 
     def HandleKey(self, sdlEvent):
+        # Get the SDL Keyboard Event
         keyEvent = sdlEvent.key
         keyCode = keyEvent.keysym.sym
-        if sdlEvent.type == SDLEvents.SDL_KEYDOWN:
-            if keyEvent.repeat == False:
-                if keyCode in self.diKeys.keys():
-                    self.diKeys[keyCode].Press(self)
-        elif sdlEvent.type == SDLEvents.SDL_KEYUP:
-            if keyEvent.repeat == False:
-                if keyCode in self.diKeys.keys():
-                    self.diKeys[keyCode].Release(self)
 
+        # I only care about non-repeated
+        if keyEvent.repeat == False:
+            # If we have this in our dict
+            if keyCode in self.diKeys.keys():
+                # If it's a registered button
+                if isinstance(self.diKeys[keyCode], Button):
+                    # Delegate to the button
+                    self.diKeys[keyCode].Toggle(self):
+                # Otherwise it should be a bool, so flip it
+                else:
+                    self.diKeys[keyCode] = not(self.diKeys[keyCode])
+            # If it's new and it's a keydown event, add a bool to the dict
+            elif sdlEvent.type == SDLEvents.SDL_KEYDOWN:
+                self.diKeys[keyCode] = True
+
+    # If a button was registered, return it, otherwise return None
     def GetButton(self, keyCode):
         if keyCode in self.diKeyStates.keys():
+            if isinstance(self.diKeys[keyCode], Button):
+                return self.diKeyStates[keyCode]
+        return None
+
+    # If a button was registered return it's state
+    # Otherwise if we have it return the bool, else False
+    def IsKeyDown(self, keyCode):
+        if self.GetButton(keyCode) is not None:
+            return self.GetButton(keyCode).state
+        elif keyCode in self.diKeyStates.keys():
             return self.diKeyStates[keyCode]
-        raise IndexError('Unregistered button queried')
+        return False
 
 class MouseManager:
     def __init__(self, liButtons, motionCallback = None):
