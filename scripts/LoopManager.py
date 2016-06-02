@@ -57,12 +57,6 @@ class LoopGraph(StateGraph):
     def UpdateSamplePos(self, numBufs):
         self.curSamplePosInc += numBufs * self.LM.GetBufferSize()
 
-    # If the keycode is one of ours, set the stimulus
-    # (but don't change state yet)
-    def HandleInput(self, key):
-        if key in self.keyDict.keys():
-            self.stim = self.keyDict[key]
-
     # Presumably when this is called, the HandleInput
     # or SetSamplePos functions have had their input and
     # the update function is ready to determine where to go

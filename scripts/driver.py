@@ -19,6 +19,7 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__))+'/sdl2')
 import events as SDLEvents
 import keycode as SDLK
 
+# Used to cast sdl event capsule to a pointer to the struct
 import ctypes
 def convert_capsule_to_int(capsule):
     ctypes.pythonapi.PyCapsule_GetPointer.restype = ctypes.c_void_p
@@ -31,24 +32,26 @@ def convert_capsule_to_int(capsule):
 # to a pyl module somehow, but that won't help
 g_LoopGraph = None
 
-g_InputManager = None
-
 def InitInputManager(pScene):
     cScene = pylScene.Scene(pScene)
 
+    # The escape key callback tells the scene to quit
     def fnEscapeKey(btn, keyMgr):
         nonlocal cScene
         cScene.SetQuitFlag(True)
     btnEscapeKey = InputManager.Button(SDLK.SDLK_ESCAPE, fnUp = fnEscapeKey)
 
+    # The space key callback tells the loop manager to play/pause
     def fnSpaceKey(btn, keyMgr):
         nonlocal cScene
         LM = pylLM.LoopManager(cScene.GetLoopManagerPtr())
         LM.PlayPause()
     btnSpaceKey = InputManager.Button(SDLK.SDLK_SPACE, fnUp = fnSpaceKey)
 
+    # Create Key Manager
     keyMgr = InputManager.KeyboardManager((btnEscapeKey, btnSpaceKey))
 
+    # I don't know what to do with the mouse yet...
     def fnMouseClick(btn, mouseMgr):
         global cScene
         if btn.code is SDLEvents.SDL_BUTTON_RIGHT:
@@ -107,8 +110,10 @@ def InitScene(pScene):
     cCamera.InitOrtho(camDim, camDim, camDim)
     
     # Create the loop graph (in LoopManager.py)
+    # and give it an input manager
     global g_LoopGraph
     g_LoopGraph = InitLoopManager(cScene)
+    g_LoopGraph.inputManager = InitInputManager(pScene)
 
     # Create the drawables from nodes in the loop graph
     # They're in a "circle" about the visible region
@@ -130,9 +135,6 @@ def InitScene(pScene):
     # Unbind the shader
     cShader.Unbind()
 
-    global g_InputManager
-    g_InputManager = InitInputManager(pScene)
-
 # Called every frame from C++
 def Update(pScene):
     # Right now this just updates the loop graph
@@ -144,18 +146,6 @@ def HandleEvent(pEvent):
     # cast pointer to SDL event as ctype struct
     h = convert_capsule_to_int(pEvent)
     e = SDLEvents.SDL_Event.from_address(h)
-    g_InputManager.HandleEvent(e)
 
-    ## This is a proof of concept...
-    #def HandleKeyUp(e):
-    #    global g_LoopGraph
-    #    sym = e.key.keysym.sym
-    #    if sym == SDLK.SDLK_ESCAPE:
-    #        return False
-    #    g_LoopGraph.HandleInput(sym)
-    #    return True
-
-    #inputDict = {SDLEvents.SDL_KEYUP:HandleKeyUp,}
-
-    #if e.type in inputDict.keys():
-    #    return inputDict[e.type](e)
+    # Delegate to the the loop graph's input manager
+    g_LoopGraph.inputManager.HandleEvent(e)

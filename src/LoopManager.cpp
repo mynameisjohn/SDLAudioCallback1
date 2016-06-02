@@ -205,47 +205,6 @@ bool LoopManager::GetNumBuffersCompleted( size_t * pNumBufs )
 	m_liPublicTaskQueue.erase( std::remove_if( m_liPublicTaskQueue.begin(), m_liPublicTaskQueue.end(), prIsTaskFromAudioThread() ), m_liPublicTaskQueue.end() );
 
 	return *pNumBufs > 0;
-
-	//// Take any tasks the audio thread has left us
-	//// and put them in a new list on the stack
-	//std::list<Task> liNewTaskList;
-	//{
-
-
-	//	// This is actually kind of expensive... but whatever
-	//	auto itFromAudThread = std::remove_if( m_liPublicTaskQueue.begin(), m_liPublicTaskQueue.end(), prIsTaskFromAudioThread() );
-	//	liNewTaskList.splice( liNewTaskList.end(), m_liPublicTaskQueue, itFromAudThread, m_liPublicTaskQueue.end() );
-	//}
-
-	//// This could be a class member, but I feel like that's python's job
-	//// The only concern is if it's out of date... anyway
-	//// Send python the number of loops that have occurred (based on LongestLoopCompleted tasks)
-	//// As well as a set of loops that have just started
-	//// I think that's pretty dumb, what I'd like to do is send current sample pos and figure out
-	//// what to queue up based on that, but right now this was easy
-	//size_t uLoopsCompleted( 0 );
-	//std::set<std::string> setLoopsStarted;
-	//
-	//// Handle each new task
-	//for ( auto T : liNewTaskList )
-	//{
-	//	switch ( T.eCmdID )
-	//	{
-	//		case Command::LoopLaunched:
-	//			if ( setLoopsStarted.count( T.pLoop->GetName() ) )
-	//				throw std::runtime_error( "More than one loop passed!" );
-	//			setLoopsStarted.insert( T.pLoop->GetName() );
-	//			break;
-	//		case Command::LongestLoopCompleted:
-	//			uLoopsCompleted++;
-	//			break;
-	//		default:
-	//			break;
-	//	}
-	//}
-
-	//// Let the python script know what's going on
-	//obDriverScript.call_function( "Update", this, uLoopsCompleted, setLoopsStarted );
 }
 
 // Called by audio thread
@@ -442,6 +401,7 @@ bool LoopManager::Configure( std::map<std::string, int> mapAudCfg )
 	{
 		std::cout << "Error initializing SDL Audio" << std::endl;
 		std::cout << SDL_GetError() << std::endl;
+		memset( &m_AudioSpec, 0, sizeof( SDL_AudioSpec ) );
 		return false;
 	}
 
@@ -450,12 +410,17 @@ bool LoopManager::Configure( std::map<std::string, int> mapAudCfg )
 	return true;
 }
 
+// TODO Have this send a message telling all loops to fade to silence
+// without blowing out sample position, and actually pause once that's done
 bool LoopManager::PlayPause()
 {
+	// This gets set if configure is successful
 	if ( m_AudioSpec.userdata == nullptr )
 		return false;
 
+	// Toggle audio playback (and bool)
 	m_bPlaying = !m_bPlaying;
+
 	if ( m_bPlaying )
 		SDL_PauseAudio( 0 );
 	else
