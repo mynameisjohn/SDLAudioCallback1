@@ -3,6 +3,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 Scene::Scene( pyl::Object obInitScript ) :
+	m_bQuitFlag( false ),
 	m_GLContext( nullptr ),
 	m_pWindow( nullptr ),
 	m_obDriverScript( obInitScript )
@@ -139,6 +140,16 @@ Camera * Scene::GetCameraPtr() const
 	return (Camera *) &m_Camera;
 }
 
+void Scene::SetQuitFlag( bool bQuit )
+{
+	m_bQuitFlag = bQuit;
+}
+
+bool Scene::GetQuitFlag() const
+{
+	return m_bQuitFlag;
+}
+
 Drawable * Scene::GetDrawable( const size_t drIdx ) const
 {
 	if ( drIdx < m_vDrawables.size() )
@@ -172,4 +183,6 @@ Drawable * Scene::GetDrawable( const size_t drIdx ) const
 	AddMemFnToMod( Scene, GetCameraPtr, Camera *, pSceneModuleDef );
 	AddMemFnToMod( Scene, GetLoopManagerPtr, LoopManager *, pSceneModuleDef );
 	AddMemFnToMod( Scene, GetDrawable, Drawable *, pSceneModuleDef, size_t );
+	AddMemFnToMod( Scene, GetQuitFlag, bool, pSceneModuleDef );
+	AddMemFnToMod( Scene, SetQuitFlag, void, pSceneModuleDef, bool );
 }

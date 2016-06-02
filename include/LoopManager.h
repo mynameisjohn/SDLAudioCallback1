@@ -57,6 +57,7 @@ public:
 	// A message sent from python, the int is a Command enum (hopefully)
 	using Message = std::tuple<int, pyl::Object>;
 private:
+	bool m_bPlaying;
 	SDL_AudioSpec m_AudioSpec;				// Audio spec, describes loop format
 	size_t m_uSamplePos;					// Current sample pos in playback
 	size_t m_uMaxSampleCount;				// Sample count of longest loop
@@ -85,7 +86,7 @@ public:
 	bool GetNumBuffersCompleted( size_t * pNumBufs );
 
 	bool Configure( std::map<std::string, int> mapAudCfg );
-	bool Start();
+	bool PlayPause();
 
 	// Various gets
 	size_t GetMaxSampleCount() const;

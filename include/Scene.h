@@ -10,6 +10,7 @@
 
 class Scene
 {
+	bool m_bQuitFlag;
 	Shader m_Shader;	
 	LoopManager m_LoopManager;
 	Camera m_Camera;
@@ -23,6 +24,9 @@ public:
 
 	void Draw();
 	void Update();
+
+	void SetQuitFlag( bool bQuit );
+	bool GetQuitFlag() const;
 
 	Shader * GetShaderPtr() const;
 	Camera * GetCameraPtr() const;

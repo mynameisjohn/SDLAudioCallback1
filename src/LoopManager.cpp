@@ -22,6 +22,7 @@ struct prIsTaskFromAudioThread
 };
 
 LoopManager::LoopManager() :
+	m_bPlaying( false ),
 	m_uSamplePos( 0 ),
 	m_uMaxSampleCount( 0 )
 {
@@ -436,14 +437,6 @@ bool LoopManager::Configure( std::map<std::string, int> mapAudCfg )
 	m_AudioSpec.callback = (SDL_AudioCallback) LoopManager::FillAudio;
 	m_AudioSpec.userdata = this;
 
-	return true;
-}
-
-bool LoopManager::Start()
-{
-	if ( m_AudioSpec.userdata == nullptr )
-		return false;
-
 	SDL_AudioSpec received;
 	if ( SDL_OpenAudio( &m_AudioSpec, &received ) )
 	{
@@ -452,7 +445,21 @@ bool LoopManager::Start()
 		return false;
 	}
 
-	SDL_PauseAudio( 0 );
+	m_bPlaying = false;
+
+	return true;
+}
+
+bool LoopManager::PlayPause()
+{
+	if ( m_AudioSpec.userdata == nullptr )
+		return false;
+
+	m_bPlaying = !m_bPlaying;
+	if ( m_bPlaying )
+		SDL_PauseAudio( 0 );
+	else
+		SDL_PauseAudio( 1 );
 
 	return true;
 }
@@ -476,7 +483,7 @@ const std::string LoopManager::strModuleName = "pylLoopManager";
 	AddMemFnToMod( LoopManager, GetBufferSize, size_t, pLoopManagerDef );
 	AddMemFnToMod( LoopManager, GetLoop, Loop *, pLoopManagerDef, std::string );
 	AddMemFnToMod( LoopManager, Configure, bool, pLoopManagerDef, std::map<std::string, int> );
-	AddMemFnToMod( LoopManager, Start, bool, pLoopManagerDef );
+	AddMemFnToMod( LoopManager, PlayPause, bool, pLoopManagerDef );
 
 	pLoopManagerDef->SetCustomModuleInit( [] ( pyl::Object obModule )
 	{

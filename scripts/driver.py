@@ -12,6 +12,7 @@ import pylCamera
 from LoopGraph import LoopState, LoopSequence, Loop
 from StateGraph import StateGraph
 from LoopManager import *
+import InputManager
 
 import sys, os
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+'/sdl2')
@@ -29,6 +30,37 @@ def convert_capsule_to_int(capsule):
 # stops somewhere I guess. Maybe I can add it
 # to a pyl module somehow, but that won't help
 g_LoopGraph = None
+
+g_InputManager = None
+
+def InitInputManager(pScene):
+    cScene = pylScene.Scene(pScene)
+
+    def fnEscapeKey(btn, keyMgr):
+        nonlocal cScene
+        cScene.SetQuitFlag(True)
+    btnEscapeKey = InputManager.Button(SDLK.SDLK_ESCAPE, fnUp = fnEscapeKey)
+
+    def fnSpaceKey(btn, keyMgr):
+        nonlocal cScene
+        LM = pylLM.LoopManager(cScene.GetLoopManagerPtr())
+        LM.PlayPause()
+    btnSpaceKey = InputManager.Button(SDLK.SDLK_SPACE, fnUp = fnSpaceKey)
+
+    keyMgr = InputManager.KeyboardManager((btnEscapeKey, btnSpaceKey))
+
+    def fnMouseClick(btn, mouseMgr):
+        global cScene
+        if btn.code is SDLEvents.SDL_BUTTON_RIGHT:
+            print('Right Button up at', mouseMgr.mousePos)
+        if btn.code is SDLEvents.SDL_BUTTON_LEFT:
+            print('Left Button up at', mouseMgr.mousePos)
+    btnRMouseClick = InputManager.Button(SDLEvents.SDL_BUTTON_RIGHT, fnUp = fnMouseClick)
+    btnLMouseClick = InputManager.Button(SDLEvents.SDL_BUTTON_LEFT, fnUp = fnMouseClick)
+
+    mouseMgr = InputManager.MouseManager((btnRMouseClick, btnLMouseClick))
+
+    return InputManager.InputManager(cScene, keyMgr, mouseMgr)
 
 # Called by the C++ Scene class's
 # constructor, inits Scene and
@@ -98,6 +130,9 @@ def InitScene(pScene):
     # Unbind the shader
     cShader.Unbind()
 
+    global g_InputManager
+    g_InputManager = InitInputManager(pScene)
+
 # Called every frame from C++
 def Update(pScene):
     # Right now this just updates the loop graph
@@ -109,17 +144,18 @@ def HandleEvent(pEvent):
     # cast pointer to SDL event as ctype struct
     h = convert_capsule_to_int(pEvent)
     e = SDLEvents.SDL_Event.from_address(h)
+    g_InputManager.HandleEvent(e)
 
-    # This is a proof of concept...
-    def HandleKeyUp(e):
-        global g_LoopGraph
-        sym = e.key.keysym.sym
-        if sym == SDLK.SDLK_ESCAPE:
-            return False
-        g_LoopGraph.HandleInput(sym)
-        return True
+    ## This is a proof of concept...
+    #def HandleKeyUp(e):
+    #    global g_LoopGraph
+    #    sym = e.key.keysym.sym
+    #    if sym == SDLK.SDLK_ESCAPE:
+    #        return False
+    #    g_LoopGraph.HandleInput(sym)
+    #    return True
 
-    inputDict = {SDLEvents.SDL_KEYUP:HandleKeyUp,}
+    #inputDict = {SDLEvents.SDL_KEYUP:HandleKeyUp,}
 
-    if e.type in inputDict.keys():
-        return inputDict[e.type](e)
+    #if e.type in inputDict.keys():
+    #    return inputDict[e.type](e)

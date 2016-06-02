@@ -51,14 +51,12 @@ int main(int argc, char ** argv)
 		pyl::Object obDriverModule = pyl::Object::from_script( "../scripts/driver.py" );
 		Scene S( obDriverModule );
 
-		// This condition should be event based
-		bool bContinue = true;
-		while ( bContinue )
+		while ( S.GetQuitFlag() == false )
 		{
 			SDL_Event e;
-			while ( SDL_PollEvent( &e ) && bContinue )
+			while ( SDL_PollEvent( &e ) && S.GetQuitFlag() == false )
 			{
-				obDriverModule.call_function( "HandleEvent", &e ).convert( bContinue );
+				obDriverModule.call_function( "HandleEvent", &e );
 			}
 
 			S.Update();

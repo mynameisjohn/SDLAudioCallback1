@@ -280,8 +280,7 @@ def InitLoopManager(cScene):
     LM.SendMessages(messageList)
    
     # Start SDL Audio 
-    if LM.Start() == False:
-        raise RuntimeError('Error opening SDL audio device')
+    LM.PlayPause()
 
     # Return the graph instance
     return loopGraph
