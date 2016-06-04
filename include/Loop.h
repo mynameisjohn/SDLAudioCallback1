@@ -28,6 +28,7 @@ private:
 	float m_fVolume;							// A float multiplier for volume
 	size_t m_uSamplesInHead;					// The number of samples in the head
 	size_t m_uTriggerResolution;				// The resolution at which we a) start if pending or b) stop/tail if stopping
+	size_t m_uStartingPos;
 	size_t m_uFadeSamples;						// The target sample for the fade-out when stopping
 	std::string m_strName;						// The name of the loop (this is never touched by aud thread)
 	std::vector<float> m_vAudioBuffer;			// The vector storing the entire head and tail (with fades baked)

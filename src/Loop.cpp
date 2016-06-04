@@ -16,7 +16,8 @@ Loop::Loop() :
 	m_fVolume( 1.f ),
 	m_uSamplesInHead( 0 ),
 	m_uTriggerResolution( 0 ),
-	m_uFadeSamples( 0 )
+	m_uFadeSamples( 0 ),
+	m_uStartingPos( 0 )
 {
 }
 
@@ -87,18 +88,32 @@ void Loop::GetData( float * const pMixBuffer, const size_t uSamplesDesired, cons
 	size_t uSamplesAdded( 0 ), uWhileLoop( 0 );
 	while ( uSamplesAdded < uSamplesDesired )
 	{
-		// The current sample pos, # left to add, pos within our buffer
+		// The current sample pos, # left to add
 		const size_t uCurrentSamplePos = uSamplesAdded + uSamplePos;
 		const size_t uSamplesLeftToAdd = uSamplesDesired - uSamplesAdded;
-		size_t uPosInBuf = uCurrentSamplePos % m_uSamplesInHead;
+
+		// We need to compute the offset sample position, which is basically transforming
+		// the global sample position into the position it would be if we had started
+		// at sample 0 (which we need to get the correct position within our buffer)
+		size_t uOffsetPos( 0 );
+		if ( uCurrentSamplePos < m_uStartingPos )
+			uOffsetPos = m_uStartingPos - uCurrentSamplePos;
+		else
+			uOffsetPos = uCurrentSamplePos - m_uStartingPos;
+	
+		// Now that we have the offset sample position, 
+		// compute the position within our buf
+		size_t uPosInBuf = uOffsetPos % m_uSamplesInHead;
 		
-		// Boundaries for the three loops
+		// Where the last sample would be, ignoring the size of our head buffer
 		const size_t uTentativeLastSample = uPosInBuf + uSamplesLeftToAdd;
+
+		// Boundaries for the three loops, clamped by what we can actually add
 		size_t uLastHeadSample = std::min( uTentativeLastSample, uFadeBegin );
 		size_t uLastTailSample = std::min( uTentativeLastSample, uSamplesInTail );
 		size_t uLastFadeoutToBegin = std::min( uTentativeLastSample, m_uSamplesInHead );
 
-		// Quantities used for trigger states (like pending, stopping)
+		// Quantities used for trigger states like pending, stopping (note that we use uCurrentSamplePos)
 		const size_t uPosAlongTrigger = m_uTriggerResolution ? uCurrentSamplePos % m_uTriggerResolution : 0;
 		const size_t uSamplesLeftTillTrigger = m_uTriggerResolution - uPosAlongTrigger;
 
@@ -122,6 +137,9 @@ void Loop::GetData( float * const pMixBuffer, const size_t uSamplesDesired, cons
 					// Advance the number of samples added to the remainder 
 					// of the way to the trigger resoution
 					uSamplesAdded += uSamplesLeftTillTrigger;
+
+					// Set the starting position to the current sample idx
+					m_uStartingPos = (uCurrentSamplePos + uSamplesLeftTillTrigger) % m_uSamplesInHead;
 
 					// If we're pending and we hit the end of the trigger res,
 					// advance state and continue, otherwise postpone state change
@@ -322,7 +340,7 @@ void Loop::SetPending( size_t uTriggerRes )
 		case State::Pending:
 		case State::Starting:
 		case State::Looping:
-			break;
+			return;
 		case State::Stopping:
 			// Ideally this wouldn't happen during a fade...?
 			if ( m_ePrevState == State::Looping || m_ePrevState == State::Starting )
@@ -342,6 +360,7 @@ void Loop::SetPending( size_t uTriggerRes )
 	// Should we update this no matter what?
 	// I'm really not sure
 	m_uTriggerResolution = uTriggerRes;
+	m_uStartingPos = 0;
 }
 
 void Loop::SetStopping( size_t uTriggerRes )
