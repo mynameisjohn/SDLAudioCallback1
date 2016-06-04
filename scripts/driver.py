@@ -1,25 +1,16 @@
 # Local modules
 import Init
 
-import sys, os
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+'/sdl2')
-import events as SDLEvents
-import keycode as SDLK
-
-# Used to cast sdl event capsule to a pointer to the struct
-import ctypes
-def convert_capsule_to_int(capsule):
-    ctypes.pythonapi.PyCapsule_GetPointer.restype = ctypes.c_void_p
-    ctypes.pythonapi.PyCapsule_GetPointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
-    return ctypes.pythonapi.PyCapsule_GetPointer(capsule, None)
-
-# Global loopgraph instance
+# Global SoundManager instance
 # I don't like having globals, but the buck
 # stops somewhere I guess. Maybe I can add it
 # to a pyl module somehow, but that won't help
 g_SoundManager = None
 
+# Initialize the scene and the sound manager
 def Initialize(pScene):
+    # It is a bit strange that initScene returns a
+    # sound manager...
     global g_SoundManager
     g_SoundManager = Init.InitScene(pScene)
 

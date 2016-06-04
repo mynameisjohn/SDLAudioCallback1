@@ -131,7 +131,9 @@ class LoopState(StateGraph.State):
             return self.GetActiveLoopGen()
         raise RuntimeError('Attempting to return a loop seq from an inactive state')
 
+# Subclasses LoopState, contains information used during drawing
 class DrawableLoopState(LoopState):
+    # colors, stored as class variables
     clrOff = [1., 0., 0., 1.]
     clrPending = [1., 1., 0., 1.]
     clrPlaying = [0., 1., 0., 1.]
@@ -169,7 +171,7 @@ class DrawableLoopState(LoopState):
 
         self.bActive = False
 
-# StateGraph override (should I just have it own a StateGraph?)
+# SoundManager, right now it just manages a stategraph for loops
 class SoundManager:
     # Init takes the C++ LoopManager instance, an initial stim,
     # a map of keycodes to stimuli, and the stategraph args
@@ -199,6 +201,7 @@ class SoundManager:
     def PlayPause(self):
         self.LM.PlayPause()
 
+    # returns an instance to the actual state graph
     def GetStateGraph(self):
         return self.SG
 

@@ -115,6 +115,9 @@ def InitSoundManager(cScene):
         SDLK.SDLK_3 : edgeDict[s3]
     }
 
+    # The stimulus update function assigns the stim
+    # member of the stategraph based on what the
+    # button maps to in the dict
     def fnStimKey(btn, keyMgr):
         nonlocal diKeyToStim
         nonlocal SG
