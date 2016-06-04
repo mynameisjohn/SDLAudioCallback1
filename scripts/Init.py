@@ -130,8 +130,8 @@ def InitSoundManager(cScene):
 
     # The space key callback tells the loop manager to play/pause
     def fnSpaceKey(btn, keyMgr):
-        global g_LoopGraph
-        g_LoopGraph.PlayPause()
+        nonlocal LM
+        LM.PlayPause()
     liButtons.append(Button(SDLK.SDLK_SPACE, None, fnSpaceKey))
 
     # Create the input manager (no mouse manager needed)
@@ -201,7 +201,7 @@ def InitScene(pScene):
     activeState = soundManager.GetStateGraph().activeState
     nodes = soundManager.GetStateGraph().G.nodes()
     dTH = 2 * math.pi / len(nodes)
-
+    print(nodes)
     for drIdx in range(len(nodes)):
         # Different colors for playing/stopped/pending loops
         if activeState is nodes[drIdx]:
