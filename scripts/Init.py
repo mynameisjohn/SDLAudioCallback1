@@ -27,7 +27,7 @@ def InitSoundManager(cScene):
     # Create the states (these three sequences are common to all)
     lSeq_chSustain = LoopSequence('chSustain',[Loop('chSustain1', 'chSustain1_head.wav', 5, 1., 'chSustain1_tail.wav')])
     lSeq_bass = LoopSequence('bass',[Loop('bass', 'bass1_head.wav', 5, 1.,'bass1_tail.wav')])
-    lSeq_drums = LoopSequence('drums',[Loop('drum', 'drum1_head.wav', 5, 1.,'drum1_tail.wav')])
+    lSeq_drums = LoopSequence('drums',[Loop('drum1', 'drum1_head.wav', 5, 1.,'drum1_tail.wav')])
 
     # State 1 just plays lead1, lead2, lead1, lead2...
     s1 = DrawableLoopState('One', {lSeq_chSustain, lSeq_bass, lSeq_drums,
@@ -52,9 +52,15 @@ def InitSoundManager(cScene):
             Loop('lead7', 'lead7.wav')], itertools.cycle)
     })
 
+    s4 = DrawableLoopState('Four', { lSeq_bass, lSeq_drums})
+    s5 = DrawableLoopState('Five', { lSeq_bass, LoopSequence('drums2', [Loop('drum2', 'drum2.wav')])})
+
+    # Store all nodes in a list
+    nodes = [s1, s2, s3, s4, s5]
+
     # Create the directed graph; all nodes connect and self connect
     G = nx.DiGraph()
-    G.add_edges_from(itertools.product((s1, s2, s3), (s1, s2, s3)))
+    G.add_edges_from(itertools.product(nodes, nodes))
 
     # The advance function just returns a random neighbor
     def fnAdvance(SG):
@@ -66,18 +72,14 @@ def InitSoundManager(cScene):
     
     # Define the vectors between edges 
     # (used during dot product calculation, SG.stim is one of these)
-    edgeDict = {
-        s1 : [1, 0, 0],
-        s2 : [0, 1, 0],
-        s3 : [0, 0, 1]
-        }
-    for n in G.nodes():
+    diEdges = {n : [1 if n == nn else 0 for nn in nodes] for n in nodes}
+    for n in nodes:
         for nn in G.neighbors(n):
-            G[n][nn]['pathVec'] = edgeDict[nn]
+            G[n][nn]['pathVec'] = diEdges[nn]
 
     # Construct the StateGraph with an attribute 'stim' of s1's stimulus,
     # as well as a reference to the scene, so the states can use it
-    SG = StateGraph(G, fnAdvance, s1, stim = edgeDict[s1], cScene = cScene)
+    SG = StateGraph(G, fnAdvance, s1, stim = diEdges[s1], cScene = cScene)
 
     # Init audio spec
     if LM.Configure({'freq' : 44100, 'channels' : 1, 'bufSize' : 4096}) == False:
@@ -87,7 +89,7 @@ def InitSoundManager(cScene):
     sampPerMS = LM.GetSampleRate() / 1000
 
     # For each loop in the state's loop sequences
-    for loopState in G.nodes_iter():
+    for loopState in nodes:
         # The state's trigger res is its longest loop
         loopState.triggerRes = 0
         for lSeq in loopState.diLoopSequences.values():
@@ -106,14 +108,10 @@ def InitSoundManager(cScene):
                 if l.cLoop.GetNumSamples(False) > loopState.triggerRes:
                     loopState.triggerRes = l.cLoop.GetNumSamples(False)
 
-    # Create an input manager for the graph
-    # The graph's stimulus (used during state advancement)
-    # will be changed by key presses (1, 2, 3)
-    diKeyToStim = {
-        SDLK.SDLK_1 : edgeDict[s1],
-        SDLK.SDLK_2 : edgeDict[s2],
-        SDLK.SDLK_3 : edgeDict[s3]
-    }
+    # This dict maps the number keys to edge vectors defined in diEdges
+    # (provided there are less than 10 nodes...)
+    # the edge vectors are used during state advancement for the graph
+    diKeyToStim = {SDLK.SDLK_1 + i : diEdges[n] for i, n in zip(range(len(nodes)), nodes)}
 
     # The stimulus update function assigns the stim
     # member of the stategraph based on what the
@@ -204,7 +202,6 @@ def InitScene(pScene):
     activeState = soundManager.GetStateGraph().activeState
     nodes = soundManager.GetStateGraph().G.nodes()
     dTH = 2 * math.pi / len(nodes)
-    print(nodes)
     for drIdx in range(len(nodes)):
         # Different colors for playing/stopped/pending loops
         if activeState is nodes[drIdx]:
@@ -214,7 +211,7 @@ def InitScene(pScene):
 
         # Construct drawable
         th = drIdx * dTH - math.pi/2
-        if cScene.AddDrawable('quad.iqm', [camDim[0]*math.cos(th)/2, camDim[0]*math.sin(th)/2], [1., 1.], clr):
+        if cScene.AddDrawable('quad.iqm', [camDim[0]*math.cos(th)/2, camDim[0]*math.sin(th)/2], [.8, .8], clr):
             # Cache drawable index in state class
             nodes[drIdx].drIdx = drIdx
 

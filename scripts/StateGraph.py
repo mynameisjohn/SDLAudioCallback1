@@ -13,7 +13,7 @@ class State(abc.ABC):
         return hash(self.name)
 
     def __eq__(self, other):
-        return __eq__(self.name, other.name)
+        return self.name == other.name
 
     def __repr__(self):
         return str(self.name)
