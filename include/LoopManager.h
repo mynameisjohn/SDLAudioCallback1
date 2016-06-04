@@ -75,7 +75,7 @@ private:
 	void updateTaskQueue();
 
     // Called from Update to find out if we've filled some buffers
-    void incNumBufsCompleted()
+	void incNumBufsCompleted();
 
 	// Turn a message into something useful
 	Task translateMessage( Message& M );

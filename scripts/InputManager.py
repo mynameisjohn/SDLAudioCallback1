@@ -3,6 +3,13 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__))+'/sdl2')
 import events as SDLEvents
 import keycode as SDLK
 
+# Used to cast sdl event capsule to a pointer to the struct
+import ctypes
+def convert_capsule_to_int(capsule):
+    ctypes.pythonapi.PyCapsule_GetPointer.restype = ctypes.c_void_p
+    ctypes.pythonapi.PyCapsule_GetPointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+    return ctypes.pythonapi.PyCapsule_GetPointer(capsule, None)
+
 class Button:
     def __init__(self, code, fnDown, fnUp):
         # code should be hashable... should I have __hash__?
@@ -46,7 +53,7 @@ class KeyboardManager:
                 # If it's a registered button
                 if isinstance(self.diKeys[keyCode], Button):
                     # Delegate to the button
-                    self.diKeys[keyCode].Toggle(self):
+                    self.diKeys[keyCode].Toggle(self)
                 # Otherwise it should be a bool, so flip it
                 else:
                     self.diKeys[keyCode] = not(self.diKeys[keyCode])
@@ -99,7 +106,9 @@ class InputManager:
         self.keyMgr = keyMgr
         self.mouseMgr = mouseMgr
 
-    def HandleEvent(self, sdlEvent):
+    def HandleEvent(self, pSdlEvent):
+        evtAddr = convert_capsule_to_int(pSdlEvent)
+        sdlEvent = SDLEvents.SDL_Event.from_address(evtAddr)
         if sdlEvent.type == SDLEvents.SDL_QUIT:
             self.cScene.SetQuitFlag(True)
         elif (sdlEvent.type == SDLEvents.SDL_KEYDOWN or

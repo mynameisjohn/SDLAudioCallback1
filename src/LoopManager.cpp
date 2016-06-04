@@ -191,7 +191,7 @@ void LoopManager::incNumBufsCompleted(){
         return;
 
     // Grab the front, maybe inc buf count and pop
-    tFront = m_liPublicTaskQueue.front();
+    Task tFront = m_liPublicTaskQueue.front();
     if (tFront.eCmdID == Command::BufCompleted){
         m_liPublicTaskQueue.pop_front();
         m_uNumBufsCompleted += tFront.U.uData;
@@ -199,7 +199,7 @@ void LoopManager::incNumBufsCompleted(){
 }
 
 // Called by main thread
-bool LoopManager::Update()
+void LoopManager::Update()
 {
     // Just see if the audio thread has left any
     // BufCompleted tasks for us
@@ -219,8 +219,8 @@ void LoopManager::updateTaskQueue()
         Task tNumBufsCompleted;
 
         // Format the taks - we leave it with one buf
-        tNumBufsCompleted.eCmdID = Task::BufCompleted;
-        tNumBufsCompleted.eCmdID.U.uData = 1;
+        tNumBufsCompleted.eCmdID = Command::BufCompleted;
+        tNumBufsCompleted.U.uData = 1;
 
         // See if there's anything still in the public queue
 		if ( m_liPublicTaskQueue.empty() == false )
@@ -233,7 +233,7 @@ void LoopManager::updateTaskQueue()
                 // If it's a buf completed task, pop it off
                 // and add its sample count to the one declared above
                 tNumBufsCompleted.U.uData += tFront.U.uData;
-                m_liPublictaskQueue.pop_front();
+                m_liPublicTaskQueue.pop_front();
             }
 
             // Take all other tasks and add them to our queue
@@ -424,6 +424,7 @@ const std::string LoopManager::strModuleName = "pylLoopManager";
 	AddMemFnToMod( LoopManager, AddLoop, bool, pLoopManagerDef, std::string, std::string, std::string, size_t, float );
 	AddMemFnToMod( LoopManager, SendMessages, bool, pLoopManagerDef, std::list<LoopManager::Message> );
 	AddMemFnToMod( LoopManager, SendMessage, bool, pLoopManagerDef, LoopManager::Message );
+	AddMemFnToMod( LoopManager, Update, void, pLoopManagerDef );
 	AddMemFnToMod( LoopManager, GetSampleRate, size_t, pLoopManagerDef );
 	AddMemFnToMod( LoopManager, GetMaxSampleCount, size_t, pLoopManagerDef );
 	AddMemFnToMod( LoopManager, GetBufferSize, size_t, pLoopManagerDef );

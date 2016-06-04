@@ -8,7 +8,7 @@ Scene::Scene( pyl::Object obInitScript ) :
 	m_pWindow( nullptr ),
 	m_obDriverScript( obInitScript )
 {
-	m_obDriverScript.call_function( "InitScene", this );
+	m_obDriverScript.call_function( "Initialize", this );
 }
 
 Scene::~Scene()

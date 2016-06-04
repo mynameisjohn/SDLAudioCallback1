@@ -25,7 +25,7 @@ class State(abc.ABC):
 
 # A graph of states, edges denote possible transitions
 class StateGraph:
-    def __init__(self, graph, fnAdvance, initialState, attrDict = None):
+    def __init__(self, graph, fnAdvance, initialState, **kwargs):
         # The graph, the initial state, and the advancement function
         self.G = graph
         self.activeState = initialState
@@ -51,16 +51,20 @@ class StateGraph:
         self._stateCoro = stateCoro(self)
 
         # Optional attrdict argument
-        if attrDict is not None:
-            for k, v in attrDict.items():
+        if kwargs is not None:
+            for k, v in kwargs.items():
                 setattr(self, k, v)
 
     # Returns the current active state
     def GetActiveState(self):
         return self.activeState
 
-    # Advances state coro and returns next state
+    # Returns next state without advancing
     def GetNextState(self):
+        return self._fnAdvance(self)
+
+    # Actually advance the state coro and return next state
+    def AdvanceState(self):
         return next(self._stateCoro)
 
     # Just returns states in a container

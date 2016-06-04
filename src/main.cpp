@@ -4,50 +4,17 @@
 #include <SDL_events.h>
 #include <GL/glew.h>
 #include <SDL_opengl.h>
-#include <glm/gtc/type_ptr.hpp>
-
-#include "LoopManager.h"
 #include <iostream>
-#include "Drawable.h"
-#include "Camera.h"
-#include "Shader.h"
+#include <stdexcept>
 #include "Scene.h"
-#include <memory>
-
-bool pylExpose()
-{
-	// Create the SDL keys module for python
-	pyl::ModuleDef * pSDLKeysModule = pyl::ModuleDef::CreateModuleDef<struct st_SDLK>( "pylSDLKeys" );
-	if ( pSDLKeysModule == nullptr )
-	{
-		std::cout << "Error: Unable to create SDL keycode python module" << std::endl;
-		pyl::print_error();
-		return false;
-	}
-
-	pSDLKeysModule->SetCustomModuleInit( [] ( pyl::Object obModule )
-	{
-		obModule.set_attr( "Escape", (int) SDLK_ESCAPE );
-		obModule.set_attr( "Space", (int) SDLK_SPACE );
-		obModule.set_attr( "Num1", (int) SDLK_1 );
-		obModule.set_attr( "Num2", (int) SDLK_2 );
-		obModule.set_attr( "Num3", (int) SDLK_3 );
-	} );
-
-	Scene::pylExpose();
-	pyl::initialize();
-
-	return true;
-}
 
 int main(int argc, char ** argv)
 {
-	// Load up the driver module and init the loopmanager
-	if ( pylExpose() == false )
-		return EXIT_FAILURE;
-
 	try
 	{
+		Scene::pylExpose();
+		pyl::initialize();
+
 		pyl::Object obDriverModule = pyl::Object::from_script( "../scripts/driver.py" );
 		Scene S( obDriverModule );
 
