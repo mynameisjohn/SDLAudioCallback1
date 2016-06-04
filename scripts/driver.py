@@ -44,9 +44,8 @@ def InitInputManager(pScene):
 
     # The space key callback tells the loop manager to play/pause
     def fnSpaceKey(btn, keyMgr):
-        nonlocal cScene
-        LM = pylLM.LoopManager(cScene.GetLoopManagerPtr())
-        LM.PlayPause()
+        global g_LoopGraph
+        g_LoopGraph.PlayPause()
     btnSpaceKey = InputManager.Button(SDLK.SDLK_SPACE, None, fnSpaceKey)
 
     # Create Key Manager
@@ -137,7 +136,7 @@ def InitScene(pScene):
 
 # Called every frame from C++
 def Update(pScene):
-    # Right now this just updates the loop graph
+    # All this does is update the loop graph for now
     global g_LoopGraph
     g_LoopGraph.Update()
 

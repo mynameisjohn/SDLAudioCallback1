@@ -33,8 +33,9 @@ class LoopGraph(StateGraph):
 
         # These sets are used to determine what to turn
         # on and off during Update
-        self.prevSet = set()
-        self.curSet = set()
+        # I don't think they're necessary
+        # self.prevSet = set()
+        #self.curSet = set()
 
         # The current sample pos is incremented by
         # the curSamplePos inc, which is a multiple of
@@ -51,22 +52,27 @@ class LoopGraph(StateGraph):
         # nextState is purely used for drawing pending states
         self.nextState = self._fnAdvance(self)
 
-    # Confusing function name... the sample pos should only go
-    # up by a multiple of the lm's buffer size, so pass in
-    # the number of buffers that have been rendered since last time
-    def UpdateSamplePos(self, numBufs):
-        self.curSamplePosInc += numBufs * self.LM.GetBufferSize()
-
-    # Presumably when this is called, the HandleInput
-    # or SetSamplePos functions have had their input and
-    # the update function is ready to determine where to go
-    # That means the update function must be able to use either
-    # the keyboard stim or the sample pos to advance loops
+    # Toggles the play/pause state of the c loop manager
+    def PlayPause(self):
+        self.LM.PlayPause()
 
     # Called every frame, looks at the current stimulus and
     # sample position and determines if either the graph state
     # should advance or if the active loop sequences should advance
     def Update(self):
+        # Determine how many buffers have advanced, calculate increment
+        # (this involves update the C++ Loop Manager, which locks a mutex)
+        uPrevNumBufs = self.LM.GetNumBufsCompleted()
+        self.LM.Update()
+        uPostNumBufs = self.LM.GetNumBufsCompleted()
+        if uPostNumBufs > uPrevNumBufs:
+            uNumBufs = uPostNumBufs - uPrevNumBufs
+            self.curSamplePosInc += self.LM.GetBufferSize() * uNumBufs
+        
+        # Compute the new sample pos, zero inc, don't update yet
+        newSamplePos = self.curSamplePos + self.curSamplePosInc
+        self.curSamplePosInc = 0
+
         # Determine the next state, but don't advance
         nextState = self._fnAdvance(self)
 
@@ -80,13 +86,9 @@ class LoopGraph(StateGraph):
                 nextState.UpdateDrColor(self.cScene, MyLoopState.clrPending)
             # Update next state
             self.nextState = nextState
-        
-        # Compute the new sample pos, zero inc, don't update yet
-        newSamplePos = self.curSamplePos + self.curSamplePosInc
-        self.curSamplePosInc = 0
 
         # Store the previous set of loops sent to the LM
-        self.prevSet = set(self.activeState.GetActiveLoopGen())
+        prevSet = set(self.activeState.GetActiveLoopGen())
 
         # We get out early if there's nothing to do
         bAnythingDone = False
@@ -108,9 +110,10 @@ class LoopGraph(StateGraph):
                     lSeq.AdvanceActiveLoop()
                     bAnythingDone = True
 
-        # Update sample pos, maybe reset
+        # Update sample pos, maybe inc totalLoopCount and reset
         self.curSamplePos = newSamplePos
         if self.curSamplePos >= self.LM.GetMaxSampleCount():
+            self.totalLoopCount += 1
             self.curSamplePos = 0
         
         # If no loop changes, get out
@@ -118,9 +121,9 @@ class LoopGraph(StateGraph):
             return
 
         # Compute the sets of loop changes (do I need to store curSet?)
-        self.curSet = set(self.activeState.GetActiveLoopGen())
-        setToTurnOn = self.curSet - self.prevSet
-        setToTurnOff = self.prevSet - self.curSet
+        curSet = set(self.activeState.GetActiveLoopGen())
+        setToTurnOn = curSet - prevSet
+        setToTurnOff = prevSet - curSet
 #        print('on', setToTurnOn)
 #        print('off', setToTurnOff)
 
@@ -247,7 +250,7 @@ def InitLoopManager(cScene):
     loopGraph.cScene = cScene
 
     # Create the py LM and get the samples per mS
-    sampPerMS = int(LM.GetSampleRate() / 1000.)
+    sampPerMS = LM.GetSampleRate() / 1000
 
     # For each loop in the state's loop sequences
     for loopState in loopGraph.G.nodes_iter():

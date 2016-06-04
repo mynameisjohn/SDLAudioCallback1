@@ -181,61 +181,68 @@ LoopManager::Task LoopManager::translateMessage( Message& M )
 	return T;
 }
 
-// Kind of an expensive function at the moment; 
-// Takes a reference to the driver script
-bool LoopManager::GetNumBuffersCompleted( size_t * pNumBufs )
-{
-	if ( pNumBufs == nullptr )
-		return false;
+// Called by main thread, locks mutex
+void LoopManager::incNumBufsCompleted(){
+    // We gotta lock this while we mess with the public queue
+    std::lock_guard<std::mutex> lg( m_muAudioMutex );
 
-	// We gotta lock this while we mess with the public queue
-	std::lock_guard<std::mutex> lg( m_muAudioMutex );
+    // Get out if empty
+    if ( m_liPublicTaskQueue.empty() )
+        return;
 
-	// Get out if empty
-	if ( m_liPublicTaskQueue.empty() )
-		return false;
-
-	bool bRet = false;
-
-	*pNumBufs += std::count_if( m_liPublicTaskQueue.begin(), m_liPublicTaskQueue.end(), [] ( const Task T )
-	{
-		return T.eCmdID == Command::BufCompleted;
-	} );
-
-	m_liPublicTaskQueue.erase( std::remove_if( m_liPublicTaskQueue.begin(), m_liPublicTaskQueue.end(), prIsTaskFromAudioThread() ), m_liPublicTaskQueue.end() );
-
-	return *pNumBufs > 0;
+    // Grab the front, maybe inc buf count and pop
+    tFront = m_liPublicTaskQueue.front();
+    if (tFront.eCmdID == Command::BufCompleted){
+        m_liPublicTaskQueue.pop_front();
+        m_uNumBufsCompleted += tFront.U.uData;
+    }
 }
 
-// Called by audio thread
+// Called by main thread
+bool LoopManager::Update()
+{
+    // Just see if the audio thread has left any
+    // BufCompleted tasks for us
+    incNumBufsCompleted();
+}
+
+// Called by audio thread, locks mutex
 void LoopManager::updateTaskQueue()
 {
 	// Take any tasks the main thread has left us
 	// and put them into our queue
 	{
 		std::lock_guard<std::mutex> lg( m_muAudioMutex );
-		
-		// What we're left with should be meant for us, no?
+
+        // We're going to leave the main thread a task indicating how many
+        // buffers have completed since the last time it checked the queue
+        Task tNumBufsCompleted;
+
+        // Format the taks - we leave it with one buf
+        tNumBufsCompleted.eCmdID = Task::BufCompleted;
+        tNumBufsCompleted.eCmdID.U.uData = 1;
+
+        // See if there's anything still in the public queue
 		if ( m_liPublicTaskQueue.empty() == false )
-		{
-			// Move all messages from main thread to itFromMainThread and splice (this is O(n), btw...)
-			auto itFromMainThread = std::remove_if( m_liPublicTaskQueue.begin(), m_liPublicTaskQueue.end(), std::not1( prIsTaskFromAudioThread() ) );
-			m_liAudioTaskQueue.splice( m_liAudioTaskQueue.end(), m_liPublicTaskQueue, itFromMainThread, m_liPublicTaskQueue.end() );
-		}
+        {
+            // The first task might be a leftover numBufsCompleted
+            // (happens if our buffer size is lower than the refresh rate)
+            Task tFront = m_liPublicTaskQueue.front();
+            if (tFront.eCmdID == Command::BufCompleted)
+            {
+                // If it's a buf completed task, pop it off
+                // and add its sample count to the one declared above
+                tNumBufsCompleted.U.uData += tFront.U.uData;
+                m_liPublictaskQueue.pop_front();
+            }
 
-		// Take any tasks meant for the main thread and put them
-		// into the public queue
-		if ( m_liAudioTaskQueue.empty() == false )
-		{
-			auto itFromAudThread = std::remove_if( m_liAudioTaskQueue.begin(), m_liAudioTaskQueue.end(), prIsTaskFromAudioThread() );
-			m_liPublicTaskQueue.splice( m_liPublicTaskQueue.end(), m_liAudioTaskQueue, itFromAudThread, m_liAudioTaskQueue.end() );
-		}
+            // Take all other tasks and add them to our queue
+            m_liAudioTaskQueue.splice( m_liAudioTaskQueue.end(), m_liPublicTaskQueue );
+        }
 
-		// Task indicating that buffer completed
-		Task bufCompletedTask;
-		bufCompletedTask.eCmdID = Command::BufCompleted;
-		m_liPublicTaskQueue.push_back( bufCompletedTask );
-	}
+        // The public queue is empty, leave it with the # of buffers completed
+        m_liPublicTaskQueue = {tNumBufsCompleted};
+    }
 
 	// Handle each task
 	for ( Task T : m_liAudioTaskQueue )
@@ -291,39 +298,15 @@ void LoopManager::fill_audio_impl( Uint8 * pStream, int nBytesToFill )
 		return;
 
 	// Get tasks from public thread and handle them
+    // Also let them know a buffer is about to complete
 	updateTaskQueue();
 
 	// The number of float samples we want
 	const size_t uNumSamplesDesired = nBytesToFill / sizeof( float );
 
-	// For every loop
+	// Fill audio data for each loop
 	for ( auto& itLoop : m_mapLoops )
-	{
-		// Get audio data, 
-		// detect if any loops are going from pending to starting this iteration
-		Loop& l = itLoop.second;
-		l.GetData( (float *) pStream, uNumSamplesDesired, m_uSamplePos );
-
-		//// We may want to post a message indicating that this loop has started over - first check boundaries
-		//bool bPostMessage = ((m_uSamplePos % l.GetNumSamples()) + uNumSamplesDesired > l.GetNumSamples());
-
-		//Loop::State eInitialState = l.GetState();
-		//l.GetData( (float *) pStream, uNumSamplesDesired, m_uSamplePos );
-		//Loop::State eFinalState = l.GetState();
-
-		//// We'd also like to post a message if it just went from pending to starting, but not if it's stopped or tailing now
-		//bPostMessage = bPostMessage || (eInitialState == Loop::State::Pending && eFinalState == Loop::State::Starting);
-		//bPostMessage = bPostMessage && (l.GetState() != Loop::State::Stopped && l.GetState() != Loop::State::Tail);
-
-		//// Create the task, it will make it back to the public queue next call
-		//if ( bPostMessage )
-		//{
-		//	Task T;
-		//	T.pLoop = &l;
-		//	T.eCmdID = Command::LoopLaunched;
-		//	m_liAudioTaskQueue.push_back( T );
-		//}
-	}
+		itLoop.second.GetData( (float *) pStream, uNumSamplesDesired, m_uSamplePos );
 
 	// Update sample counter, reset if we went over
 	m_uSamplePos += uNumSamplesDesired;
@@ -331,13 +314,6 @@ void LoopManager::fill_audio_impl( Uint8 * pStream, int nBytesToFill )
 	{
 		// Just do a mod
 		m_uSamplePos %= m_uMaxSampleCount;
-
-		// We also want to post a message indicating that the 
-		// longest loop has completed... unfortunately this won't be posted
-		// until the next call to updateTaskQueue
-		//Task T;
-		//T.eCmdID = Command::LongestLoopCompleted;
-		//m_liAudioTaskQueue.push_back( T );
 	}
 }
 
@@ -367,6 +343,11 @@ size_t LoopManager::GetBufferSize() const
 size_t LoopManager::GetMaxSampleCount() const
 {
 	return m_uMaxSampleCount;
+}
+
+size_t LoopManager::GetNumBufsCompleted() const
+{
+    return m_uNumBufsCompleted;
 }
 
 Loop * LoopManager::GetLoop( std::string strLoopName ) const
@@ -446,6 +427,7 @@ const std::string LoopManager::strModuleName = "pylLoopManager";
 	AddMemFnToMod( LoopManager, GetSampleRate, size_t, pLoopManagerDef );
 	AddMemFnToMod( LoopManager, GetMaxSampleCount, size_t, pLoopManagerDef );
 	AddMemFnToMod( LoopManager, GetBufferSize, size_t, pLoopManagerDef );
+	AddMemFnToMod( LoopManager, GetNumBufsCompleted, size_t, pLoopManagerDef );
 	AddMemFnToMod( LoopManager, GetLoop, Loop *, pLoopManagerDef, std::string );
 	AddMemFnToMod( LoopManager, Configure, bool, pLoopManagerDef, std::map<std::string, int> );
 	AddMemFnToMod( LoopManager, PlayPause, bool, pLoopManagerDef );

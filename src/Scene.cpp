@@ -51,13 +51,6 @@ void Scene::Draw()
 
 void Scene::Update()
 {
-	size_t uCompletedBuffers (0);
-	if ( m_LoopManager.GetNumBuffersCompleted( &uCompletedBuffers ) )
-	{
-		pyl::Object obPyLoopGraph = m_obDriverScript.get_attr( "g_LoopGraph" );
-		obPyLoopGraph.call_function( "UpdateSamplePos", uCompletedBuffers );
-	}
-
 	m_obDriverScript.call_function( "Update", this );
 }
 

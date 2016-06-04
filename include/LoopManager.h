@@ -58,10 +58,11 @@ public:
 	using Message = std::tuple<int, pyl::Object>;
 private:
 	bool m_bPlaying;						// Whether or not we are filling buffers of audio
-	SDL_AudioSpec m_AudioSpec;				// Audio spec, describes loop format
 	size_t m_uSamplePos;					// Current sample pos in playback
 	size_t m_uMaxSampleCount;				// Sample count of longest loop
+    size_t m_uNumBufsCompleted;             // The number of buffers filled by the audio thread
 	std::map<std::string, Loop> m_mapLoops;	// Loop storage, right now the map is a convenience
+	SDL_AudioSpec m_AudioSpec;				// Audio spec, describes loop format
 
 	std::mutex m_muAudioMutex;				// Mutex controlling communication between audio and main threads
 	std::list<Task> m_liPublicTaskQueue;	// Anyone can put tasks here, will be read by audio thread
@@ -70,8 +71,11 @@ private:
 	// The actual callback function used to fill audio buffers
 	void fill_audio_impl( Uint8 * pStream, int nBytesToFill );
 
-	// Called internally to pass messages between audio and main thread
+	// Called by audio thread to get messages from main thread
 	void updateTaskQueue();
+
+    // Called from Update to find out if we've filled some buffers
+    void incNumBufsCompleted()
 
 	// Turn a message into something useful
 	Task translateMessage( Message& M );
@@ -83,7 +87,7 @@ public:
 	LoopManager( SDL_AudioSpec sdlAudioSpec );
 
 	// Called periodically to pump python script
-	bool GetNumBuffersCompleted( size_t * pNumBufs );
+    void Update();
 
 	// Configure the audio device
 	bool Configure( std::map<std::string, int> mapAudCfg );
@@ -95,6 +99,7 @@ public:
 	size_t GetMaxSampleCount() const;
 	size_t GetSampleRate() const;
 	size_t GetBufferSize() const;
+    size_t GetNumBufsCompleted() const;
 	Loop * GetLoop( std::string strLoopName ) const;
 
 	// Called from python to add tasks to public queue
