@@ -192,7 +192,7 @@ class SoundManager:
         # the preTrigger is the number of samples before
         # the expected loop duration at which we send a state
         # change (we wait as long as possible.) 
-        self.preTrigger = self.LM.GetBufferSize()
+        self.preTrigger = 3 * self.LM.GetBufferSize()
         
         # Prime stategraph, nextState is purely used for drawing pending states
         self.nextState = self.SG.AdvanceState()

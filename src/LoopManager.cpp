@@ -24,7 +24,8 @@ struct prIsTaskFromAudioThread
 LoopManager::LoopManager() :
 	m_bPlaying( false ),
 	m_uSamplePos( 0 ),
-	m_uMaxSampleCount( 0 )
+	m_uMaxSampleCount( 0 ),
+	m_uNumBufsCompleted( 0 )
 {
 }
 
