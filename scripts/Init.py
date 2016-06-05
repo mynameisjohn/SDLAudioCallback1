@@ -101,12 +101,14 @@ def InitSoundManager(cScene):
                 if  LM.AddLoop(l.name, l.headFile, l.tailFile, int(sampPerMS * l.fadeMS), l.vol) == False:
                     raise IOError(l.name)
 
-                # If successful, store handle to c loop
-                l.cLoop = pylLoop.Loop(LM.GetLoop(l.name))
+                # If successful, get a handle to c loop and store head/tail duration
+                cLoop = pylLoop.Loop(LM.GetLoop(l.name))
+                l.uNumHeadSamples = cLoop.GetNumSamples(False)
+                l.uNumTailSamples = cLoop.GetNumSamples(True) - l.uNumHeadSamples
 
                 # The state's trigger res is its longest loop
-                if l.cLoop.GetNumSamples(False) > loopState.triggerRes:
-                    loopState.triggerRes = l.cLoop.GetNumSamples(False)
+                if l.uNumHeadSamples > loopState.triggerRes:
+                    loopState.triggerRes = l.uNumHeadSamples
 
     # This dict maps the number keys to edge vectors defined in diEdges
     # (provided there are less than 10 nodes...)

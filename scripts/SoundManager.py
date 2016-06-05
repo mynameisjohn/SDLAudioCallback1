@@ -46,7 +46,7 @@ class LoopSequence:
         self._genFuncConstructor = genFunc
         self._genFunc = None
         self.activeLoop = None
-        init()
+       
     # Context function that gets entered when the state
     # owning this loop seq becomes active. Constructs
     # the generator expression to restart it and 
@@ -259,7 +259,7 @@ class SoundManager:
         else:
             # Determine if we should advance the active loop seq
             for lSeq in curState.diLoopSequences.values():
-                loopTrig = lSeq.activeLoop.cLoop.GetNumSamples(False) - self.preTrigger
+                loopTrig = lSeq.activeLoop.uNumHeadSamples - self.preTrigger
                 if self.curSamplePos < loopTrig and newSamplePos >= loopTrig:
                     # Advance sequence
                     lSeq.AdvanceActiveLoop()
