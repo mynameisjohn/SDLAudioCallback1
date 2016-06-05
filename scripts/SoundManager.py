@@ -46,7 +46,7 @@ class LoopSequence:
         self._genFuncConstructor = genFunc
         self._genFunc = None
         self.activeLoop = None
-
+        init()
     # Context function that gets entered when the state
     # owning this loop seq becomes active. Constructs
     # the generator expression to restart it and 
@@ -269,7 +269,7 @@ class SoundManager:
         self.curSamplePos = newSamplePos
         if self.curSamplePos >= self.LM.GetMaxSampleCount():
             self.totalLoopCount += 1
-            self.curSamplePos = 0
+            self.curSamplePos %= self.LM.GetMaxSampleCount()
         
         # If no loop changes, get out
         if bAnythingDone == False:
