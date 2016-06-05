@@ -86,7 +86,7 @@ def InitSoundManager(cScene):
         raise RuntimeError('Invalid aud config dict')
 
     # get the samples per mS
-    sampPerMS = LM.GetSampleRate() / 1000
+    sampPerMS = int(LM.GetSampleRate() / 1000)
 
     # For each loop in the state's loop sequences
     for loopState in nodes:
@@ -98,7 +98,7 @@ def InitSoundManager(cScene):
                 if l.tailFile is None:
                     l.tailFile = ''
                 # Add the loop
-                if  LM.AddLoop(l.name, l.headFile, l.tailFile, sampPerMS * l.fadeMS, l.vol) == False:
+                if  LM.AddLoop(l.name, l.headFile, l.tailFile, int(sampPerMS * l.fadeMS), l.vol) == False:
                     raise IOError(l.name)
 
                 # If successful, store handle to c loop

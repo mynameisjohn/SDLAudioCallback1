@@ -97,7 +97,7 @@ void Loop::GetData( float * const pMixBuffer, const size_t uSamplesDesired, cons
 		// at sample 0 (which we need to get the correct position within our buffer)
 		size_t uOffsetPos( 0 );
 		if ( uCurrentSamplePos < m_uStartingPos )
-			uOffsetPos = m_uStartingPos - uCurrentSamplePos;
+			uOffsetPos = (m_uSamplesInHead - m_uStartingPos) + uCurrentSamplePos;
 		else
 			uOffsetPos = uCurrentSamplePos - m_uStartingPos;
 	
