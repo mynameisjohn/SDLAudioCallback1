@@ -118,9 +118,9 @@ bool Scene::AddDrawable( std::string strIqmFile, vec2 T, vec2 S, vec4 C )
 	}
 }
 
-LoopManager * Scene::GetLoopManagerPtr() const
+const SoundManager * Scene::GetSoundManagerPtr() const
 {
-	return (LoopManager *) &m_LoopManager;
+	return &m_SoundManager;
 }
 
 Shader * Scene::GetShaderPtr() const
@@ -152,7 +152,7 @@ Drawable * Scene::GetDrawable( const size_t drIdx ) const
 
 /*static*/ void Scene::pylExpose()
 {
-	LoopManager::pylExpose();
+	SoundManager::pylExpose();
 	Shader::pylExpose();
 	Camera::pylExpose();
 	Drawable::pylExpose();
@@ -164,17 +164,11 @@ Drawable * Scene::GetDrawable( const size_t drIdx ) const
 
 	pSceneModuleDef->RegisterClass<Scene>( "Scene" );
 
-	//std::function<bool( Scene *, int, int, int, int, vec4 )> fnScInitDisp = &Scene::InitDisplay;
-	//pSceneModuleDef->RegisterMemFunction<Scene, struct st_fnScInitDisp>( "InitDisplay", fnScInitDisp );
-
-	//std::function<bool( Scene *, std::map<std::string, int> mapLoopManagerCfg )> fnScAddDrawable = &Scene::AddDrawable;
-	//pSceneModuleDef->RegisterMemFunction<Scene, struct st_fnAddDrawable>( "AddDrawable", fnScAddDrawable );
-
 	AddMemFnToMod( Scene, InitDisplay, bool, pSceneModuleDef, int, int, int, int, vec4 );
 	AddMemFnToMod( Scene, AddDrawable, bool, pSceneModuleDef, std::string, vec2, vec2, vec4 );
 	AddMemFnToMod( Scene, GetShaderPtr, Shader *, pSceneModuleDef );
 	AddMemFnToMod( Scene, GetCameraPtr, Camera *, pSceneModuleDef );
-	AddMemFnToMod( Scene, GetLoopManagerPtr, LoopManager *, pSceneModuleDef );
+	AddMemFnToMod( Scene, GetSoundManagerPtr, const SoundManager *, pSceneModuleDef );
 	AddMemFnToMod( Scene, GetDrawable, Drawable *, pSceneModuleDef, size_t );
 	AddMemFnToMod( Scene, GetQuitFlag, bool, pSceneModuleDef );
 	AddMemFnToMod( Scene, SetQuitFlag, void, pSceneModuleDef, bool );

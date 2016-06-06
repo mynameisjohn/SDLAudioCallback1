@@ -1,6 +1,5 @@
 # pyl modules
-import pylLoopManager as pylLM
-import pylLoop
+import pylSoundManager
 import pylScene
 import pylDrawable
 import pylShader
@@ -15,14 +14,14 @@ import math
 import networkx as nx
 import itertools
 
-from SoundManager import *
+from LoopManager import *
 from StateGraph import StateGraph
 from InputManager import *
 
 # Function to create state graph
-def InitSoundManager(cScene):
-    # Create LM wrapper
-    LM = pylLM.LoopManager(cScene.GetLoopManagerPtr())
+def InitLoopManager(cScene):
+    # Create cSM wrapper
+    cSM = pylSoundManager.SoundManager(cScene.GetSoundManagerPtr())
 
     # Create the states (these three sequences are common to all)
     lSeq_chSustain = LoopSequence('chSustain',[Loop('chSustain1', 'chSustain1_head.wav', 5, 1., 'chSustain1_tail.wav')])
@@ -82,11 +81,14 @@ def InitSoundManager(cScene):
     SG = StateGraph(G, fnAdvance, s1, stim = diEdges[s1], cScene = cScene)
 
     # Init audio spec
-    if LM.Configure({'freq' : 44100, 'channels' : 1, 'bufSize' : 4096}) == False:
+    if cSM.Configure({'freq' : 44100, 'channels' : 1, 'bufSize' : 4096}) == False:
         raise RuntimeError('Invalid aud config dict')
 
+    # Voices (anything that makes sound) need a unique int ID
+    voiceID = 0
+
     # get the samples per mS
-    sampPerMS = int(LM.GetSampleRate() / 1000)
+    sampPerMS = int(cSM.GetSampleRate() / 1000)
 
     # For each loop in the state's loop sequences
     for loopState in nodes:
@@ -98,17 +100,20 @@ def InitSoundManager(cScene):
                 if l.tailFile is None:
                     l.tailFile = ''
                 # Add the loop
-                if  LM.AddLoop(l.name, l.headFile, l.tailFile, int(sampPerMS * l.fadeMS), l.vol) == False:
+                if  cSM.RegisterClip(l.name, l.headFile, l.tailFile, int(sampPerMS * l.fadeMS)) == False:
                     raise IOError(l.name)
 
                 # If successful, get a handle to c loop and store head/tail duration
-                cLoop = pylLoop.Loop(LM.GetLoop(l.name))
-                l.uNumHeadSamples = cLoop.GetNumSamples(False)
-                l.uNumTailSamples = cLoop.GetNumSamples(True) - l.uNumHeadSamples
+                l.uNumHeadSamples = cSM.GetNumSamplesInClip(l.name, False)
+                l.uNumTailSamples = cSM.GetNumSamplesInClip(l.name, True) - l.uNumHeadSamples
 
                 # The state's trigger res is its longest loop
                 if l.uNumHeadSamples > loopState.triggerRes:
                     loopState.triggerRes = l.uNumHeadSamples
+
+                # Give this loop a voice ID and inc
+                l.voiceID = voiceID
+                voiceID += 1
 
     # This dict maps the number keys to edge vectors defined in diEdges
     # (provided there are less than 10 nodes...)
@@ -133,23 +138,23 @@ def InitSoundManager(cScene):
 
     # The space key callback tells the loop manager to play/pause
     def fnSpaceKey(btn, keyMgr):
-        nonlocal LM
-        LM.PlayPause()
+        nonlocal cSM
+        cSM.PlayPause()
     liButtons.append(Button(SDLK.SDLK_SPACE, None, fnSpaceKey))
 
     # Create the input manager (no mouse manager needed)
     inputManager = InputManager(cScene, KeyboardManager(liButtons), MouseManager([]))
 
     # Create the sound manager
-    soundManager = SoundManager(cScene, SG, inputManager)
+    loopManager = LoopManager(cScene, SG, inputManager)
 
     # Start the active loop seq
-    activeState = soundManager.GetStateGraph().GetActiveState()
-    messageList = [(pylLM.CMDStartLoop, (l.name, 0)) for l in activeState.GetActiveLoopGen()]
-    LM.SendMessages(messageList)
+    activeState = loopManager.GetStateGraph().GetActiveState()
+    messageList = [(pylSoundManager.CMDStartLoop, (l.name, l.voiceID, l.vol, 0)) for l in activeState.GetActiveLoopGen()]
+    cSM.SendMessages(messageList)
 
     # return the sound manager
-    return soundManager
+    return loopManager
 
 # Called by the C++ Scene class's
 # constructor, inits Scene and
@@ -195,14 +200,14 @@ def InitScene(pScene):
     camDim = [-10., 10.]
     cCamera.InitOrtho(camDim, camDim, camDim)
     
-    # Create the loop graph (in LoopManager.py)
+    # Create the loop manager (in LoopManager.py)
     # and give it an input manager
-    soundManager = InitSoundManager(cScene)
+    loopManager = InitLoopManager(cScene)
 
     # Create the drawables from nodes in the loop graph
     # They're in a "circle" about the visible region
-    activeState = soundManager.GetStateGraph().activeState
-    nodes = soundManager.GetStateGraph().G.nodes()
+    activeState = loopManager.GetStateGraph().activeState
+    nodes = loopManager.GetStateGraph().G.nodes()
     dTH = 2 * math.pi / len(nodes)
     for drIdx in range(len(nodes)):
         # Different colors for playing/stopped/pending loops
@@ -221,7 +226,7 @@ def InitScene(pScene):
     cShader.Unbind()
 
     # Start SDL audio
-    soundManager.PlayPause()
+    loopManager.PlayPause()
 
     # Return the sound manager
-    return soundManager
+    return loopManager

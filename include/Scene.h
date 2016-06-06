@@ -2,7 +2,7 @@
 
 #include "Camera.h"
 #include "Shader.h"
-#include "LoopManager.h"
+#include "SoundManager.h"
 #include "Drawable.h"
 
 #include <pyliason.h>
@@ -12,7 +12,7 @@ class Scene
 {
 	bool m_bQuitFlag;
 	Shader m_Shader;	
-	LoopManager m_LoopManager;
+	SoundManager m_SoundManager;
 	Camera m_Camera;
 	std::vector<Drawable> m_vDrawables;
 	SDL_GLContext m_GLContext;
@@ -30,7 +30,7 @@ public:
 
 	Shader * GetShaderPtr() const;
 	Camera * GetCameraPtr() const;
-	LoopManager * GetLoopManagerPtr() const;
+	const SoundManager * GetSoundManagerPtr() const;
 	Drawable * GetDrawable( size_t drIdx ) const;
 
 	bool InitDisplay( int glMajor, int glMinor, int iScreenW, int iScreenH, vec4 v4ClearColor );
