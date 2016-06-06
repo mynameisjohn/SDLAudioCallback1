@@ -86,6 +86,7 @@ def InitLoopManager(cScene):
 
     # Voices (anything that makes sound) need a unique int ID
     voiceID = 0
+    diLoopToVoiceID = dict()
 
     # get the samples per mS
     sampPerMS = int(cSM.GetSampleRate() / 1000)
@@ -112,8 +113,11 @@ def InitLoopManager(cScene):
                     loopState.triggerRes = l.uNumHeadSamples
 
                 # Give this loop a voice ID and inc
-                l.voiceID = voiceID
-                voiceID += 1
+                if l not in diLoopToVoiceID.keys():
+                    diLoopToVoiceID[l] = voiceID
+                    voiceID += 1
+                l.voiceID = diLoopToVoiceID[l]
+                print(l.name, l.voiceID)
 
     # This dict maps the number keys to edge vectors defined in diEdges
     # (provided there are less than 10 nodes...)
