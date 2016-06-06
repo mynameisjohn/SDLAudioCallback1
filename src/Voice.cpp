@@ -147,7 +147,7 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
 			case EState::TailPending:
 			case EState::Pending:
 				// If we'll hit the trigger resolution
-				if ( uTentativeLastSample >= m_uTriggerRes )
+				if ( uSamplesLeftTillTrigger < uSamplesLeftToAdd )
 				{
 					// Advance the number of samples added to the remainder 
 					// of the way to the trigger resoution
