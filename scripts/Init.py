@@ -134,6 +134,20 @@ def InitLoopManager(cScene):
             SG.stim = diKeyToStim[btn.code]
     liButtons = [Button(k, None, fnStimKey) for k in diKeyToStim.keys()]
 
+    arpClip = Loop('arp', 'arplead1.wav')
+    arpClip.voiceID = voiceID + 1
+    if cSM.RegisterClip(arpClip.name, arpClip.headFile, arpClip.tailFile, int(sampPerMS * arpClip.fadeMS)) == False:
+        raise IOError(arpClip.name)
+
+    # Hard coded test for now
+    def fnOneShotKey(btn, keyMgR):
+        nonlocal cSM
+        nonlocal arpClip
+        t = (arpClip.name, arpClip.voiceID, arpClip.vol, int(cSM.GetMaxSampleCount() / 4))
+        print(pylSoundManager.CMDOneShot, t)
+        cSM.SendMessage((pylSoundManager.CMDOneShot, t))
+    liButtons.append(Button(SDLK.SDLK_f, None, fnOneShotKey))
+
     # The escape key callback tells the scene to quit
     def fnEscapeKey(btn, keyMgr):
         nonlocal cScene
