@@ -134,7 +134,7 @@ def InitLoopManager(cScene):
             SG.stim = diKeyToStim[btn.code]
     liButtons = [Button(k, None, fnStimKey) for k in diKeyToStim.keys()]
 
-    arpClip = Loop('arp', 'arplead1.wav')
+    arpClip = Loop('arp', 'arplead1.wav', 5, 1.,'arplead1.wav')
     arpClip.voiceID = voiceID + 1
     if cSM.RegisterClip(arpClip.name, arpClip.headFile, arpClip.tailFile, int(sampPerMS * arpClip.fadeMS)) == False:
         raise IOError(arpClip.name)

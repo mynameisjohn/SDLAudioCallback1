@@ -129,10 +129,10 @@ void Voice::SetPending(const size_t uTriggerRes, bool bLoop /*= false*/)
 
         // If we're tailing or stopped, set the appropriate pending state
         case EState::Tail:
-            setState(bLoop ? EState::TailPending : EState::TailOneShot);
+			eNextState = (bLoop ? EState::TailPending : EState::TailOneShot);
             break;
         case EState::Stopped:
-            setState(bLoop ? EState::Pending : EState::OneShot);
+			eNextState = (bLoop ? EState::Pending : EState::OneShot);
             break;
     }
 
@@ -369,7 +369,7 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
                 // If we're in the tail state, manually advance the number 
                 // of samples added, since the tail  loop doesn't do that 
                 // (shitty, I know, but if we don't then we'll loop forever)
-                uSamplesAdded += uLastTailSample - uPosInBuf;
+                uSamplesAdded += uLastTailSample - uFirstTailSample;
 
                 // If we'll hit the end of the tail
                 if ( uLastTailSample == uTotalSampleCount )
