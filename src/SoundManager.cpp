@@ -248,34 +248,37 @@ void SoundManager::updateTaskQueue()
 			case ECommandID::Start:
 				for ( auto& itLoop : m_mapClips )
 					m_liVoices.emplace_back( &itLoop.second, cmd.uData, cmd.fData, false );
-				break;
+            break;
+
 			// Stop every loop
 			case ECommandID::Stop:
 				for ( Voice& v : m_liVoices )
 					v.SetStopping( cmd.uData );
-				break;
+            break;
+
 			// Start a specific loop
 			case ECommandID::StartLoop:
 			case ECommandID::OneShot:
-			{
+                // If it isn't already there, construct the voice
 				if ( itVoice == m_liVoices.end() )
-					m_liVoices.emplace_back( cmd.pClip, cmd.iData, cmd.uData, cmd.fData, cmd.eID == ECommandID::StartLoop );
-				break;
-			}
+					m_liVoices.emplace_back( cmd );
+                // Otherwise try set the voice to pending
+                else
+                    itVoice->SetPending( cmd.uData, cmd.eID == ECommand::StartLoop );
+            break;
+
 			// Stop a specific loop
 			case ECommandID::StopLoop:
-			{
 				if ( itVoice != m_liVoices.end() )
 					itVoice->SetStopping( cmd.uData );
-				break;
-			}
+            break;
+
 			// Set the volume of a loop
 			case ECommandID::SetVolume:
-			{
 				if ( itVoice != m_liVoices.end() )
 					itVoice->SetVolume( cmd.fData );
-				break;
-			}
+            break;
+
 			// Uhhh
 			case ECommandID::Pause:
 			default:
