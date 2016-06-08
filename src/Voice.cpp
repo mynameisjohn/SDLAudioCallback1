@@ -38,7 +38,7 @@ Voice::Voice (const SoundManager::Command cmd ) :
     using ECommandID = SoundManager::ECommandID;
 
     // Check the validity of the command
-    if (cmd.eID == ECommandID::StartLoop || cmd.eID = ECommandID::OneShot)
+    if (cmd.eID == ECommandID::StartLoop || cmd.eID == ECommandID::OneShot)
     {
         if (cmd.pClip && cmd.eID != ECommandID::None)
         {
@@ -210,6 +210,10 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
             // (starting before it has rendered all its samples)
             uFirstTailSample = m_uLastTailSampleAdded;
             uLastTailSample = std::min( uFirstTailSample + uSamplesLeftToAdd, uTotalSampleCount );
+
+			// Update the last tail sample added
+			if ( uLastTailSample > uFirstTailSample )
+				m_uLastTailSampleAdded += (uLastTailSample - uFirstTailSample);
         }
         else if (m_eState == EState::Looping)
         {
@@ -269,7 +273,7 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
 				}
 
 				// If we're currently mixing in the tail, jump down
-				if ( m_eState == EState::TailPending || m_eState == State::TailOneShot )
+				if ( m_eState == EState::TailPending || m_eState == EState::TailOneShot )
 					goto Case_Tail;
 
 				// We're pending and we won't play this iteration, get out
@@ -368,7 +372,7 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
                 uSamplesAdded += uLastTailSample - uPosInBuf;
 
                 // If we'll hit the end of the tail
-                if ( uLastTailSample == uSamplesInTail )
+                if ( uLastTailSample == uTotalSampleCount )
                 {
                     // A real tail means we're stopped
                     if ( m_eState == EState::Tail )
@@ -399,14 +403,13 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
 		}
 
 		// Add the tail samples
-        for ( size_t uTailIdx = uFirstTailSample, tMixIdx = 0; uTailIdx < uLastTailSample; uTailIdx++)
+        for ( size_t uTailIdx = uFirstTailSample; uTailIdx < uLastTailSample; uTailIdx++)
 		{
 			float fSampleVal = m_fVolume * pAudioData[uTailIdx];
-			pFirstTailMixSample[tMixIdx++] += fSampleVal;
+			*pFirstTailMixSample++ += fSampleVal;
 		}
 
-        // Update the last tail sample added
-        m_uLastTailSampleAdded += (uLastTailSample - uFirstTailSample);
+
 		
         // Fade out to target sample
 		for ( size_t uFadeoutIdx = uHeadIdx; uFadeoutIdx < uLastFadeoutToBegin; uFadeoutIdx++ )

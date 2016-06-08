@@ -264,7 +264,7 @@ void SoundManager::updateTaskQueue()
 					m_liVoices.emplace_back( cmd );
                 // Otherwise try set the voice to pending
                 else
-                    itVoice->SetPending( cmd.uData, cmd.eID == ECommand::StartLoop );
+                    itVoice->SetPending( cmd.uData, cmd.eID == ECommandID::StartLoop );
             break;
 
 			// Stop a specific loop
