@@ -180,10 +180,19 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
 	if ( uSamplesInHead == 0 || pAudioData == nullptr )
 		return;
 
-	// While there are samples left to add (and the # of this while loop's iterations)
-	size_t uSamplesAdded( 0 );
-	while ( uSamplesAdded < uSamplesDesired )
+	// Keep a counter of how many times the while loop iterates below
+	// )worst case it goes from pending (1) to starting (the # of fades + 1) to looping (the # of filled buffers + 1)
+	size_t uWhileLoopIterations( 0 );
+	const size_t uMaxWhileLoopIterations = uFadeSamples / uSamplesDesired + uSamplesDesired / uSamplesInHead + 3;
+
+	// We loop here until the # of samples added matches the # desired
+	// uSamplesAdded is incremented when samples are added below
+	for ( size_t uSamplesAdded = 0; uSamplesAdded < uSamplesDesired; uWhileLoopIterations++ )
 	{
+		// I'd rather raise an exception than loop forever...
+		if ( uWhileLoopIterations >= uMaxWhileLoopIterations )
+			throw std::runtime_error( "Error: Possible infinite loop detected in Voice::RenderData" );
+
 		// The current sample pos, # left to add
 		const size_t uCurrentSamplePos = uSamplesAdded + uSamplePos;
 		const size_t uSamplesLeftToAdd = uSamplesDesired - uSamplesAdded;
@@ -258,21 +267,20 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
 					// If we're still in a tail state, there's an overlap
 					bTailHeadOverlap = ( m_eState == EState::TailOneShot || m_eState == EState::TailPending );
 
+					// Manually advance the # of samples added till the trigger point
+					uSamplesAdded += uSamplesLeftTillTrigger;
+
 					if ( bTailHeadOverlap )
 					{
-						// Update uSamplesAdded/uPosInBuf to the sample before the head and tail intersect
-						uSamplesAdded += std::min( uSamplesLeftTillTrigger, uSamplesLeftToAdd );
-						uFirstHeadSample = (uFirstHeadSample + uSamplesLeftTillTrigger) % uSamplesInHead;
+						// Assign the first head appropriately, it will start in once the head and tail intersect
+						uFirstHeadSample = std::min( uFirstHeadSample + uSamplesLeftTillTrigger, uSamplesInHead );
 
 						// We're going to switch to either starting(pending) or stopping(oneshot)
 						eNextState = (m_eState == EState::TailPending ? EState::Starting : EState::Stopping);
 					}
 					else
 					{
-						// Otherwise jump to the next iteration, advancing state and sample counter
-						uSamplesAdded += uSamplesLeftTillTrigger;
-
-						// We're going to switch to either starting(pending) or stopping(oneshot)
+						// Otherwise jump to the next iteration, advancing state
 						setState( m_eState == EState::Pending ? EState::Starting : EState::Stopping );
 						continue;
 					}
@@ -304,8 +312,9 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
 						pMixBuffer[uSamplesAdded++] += remap( uFirstHeadSample, 0, uFadeSamples, 0.f, fSampleVal );
 					}
 
-					// Continue here to get fade-in out of the way
-					continue;
+					// If there's still more to fade, continue to get it out of the way
+					if ( uTentativeLastSample < uFadeSamples )
+						continue;
 				}
 
 				// If we'll be fading
