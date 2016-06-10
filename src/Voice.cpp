@@ -113,18 +113,23 @@ void Voice::SetPending(const size_t uTriggerRes, bool bLoop /*= false*/)
         // If they are resetting the pending state, 
         // update state and trigger res
         case EState::Pending:
+			if ( bLoop == false )
+				eNextState = EState::OneShot;
         case EState::TailPending:
-            if (bLoop == false)
-                eNextState = EState::OneShot;
+			if ( bLoop == false )
+				eNextState = EState::TailOneShot;
         case EState::OneShot:
+			if ( bLoop )
+				eNextState = EState::Pending;
         case EState::TailOneShot:
-            if (bLoop)
-                eNextState = EState::Pending;
+			if ( bLoop )
+				eNextState = EState::TailOneShot;
             break;
 
         // If we are playing in some capacity, get out
         case EState::Starting:
         case EState::Looping:
+		case EState::Stopping:
             return;
 
         // If we're tailing or stopped, set the appropriate pending state
@@ -237,6 +242,8 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
 		// Before adding any head samples, cache a pointer to the first tail sample
 		float * pFirstTailMixSample = &pMixBuffer[uSamplesAdded];
 
+		bool bTailHeadOverlap = false;
+
 		switch ( m_eState )
 		{
 			// We're pending, and we might also be mixing in the tail
@@ -247,29 +254,22 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
 				// If we'll hit the trigger resolution
 				if ( uSamplesLeftTillTrigger < uSamplesLeftToAdd )
 				{
-					// Advance the number of samples added to the remainder 
-					// of the way to the trigger resoution
-					uSamplesAdded += uSamplesLeftTillTrigger;
-
 					// Set the starting position to the current sample idx
 					m_uStartingPos = (uCurrentSamplePos + uSamplesLeftTillTrigger) % uSamplesInHead;
 
-					// If we're pending and we hit the end of the trigger res,
-					// advance state and continue, otherwise postpone state change
-					if ( m_eState == EState::Pending )
+					if ( m_eState == EState::TailOneShot || m_eState == EState::TailPending )
 					{
-						setState( EState::Starting );
+						bTailHeadOverlap = true;
+						uSamplesAdded += std::min( uSamplesLeftTillTrigger, uSamplesLeftToAdd );
+						uPosInBuf = (uPosInBuf + uSamplesLeftTillTrigger) % uSamplesInHead;
+						eNextState = ( m_eState == EState::Pending ? EState::Starting : EState::Stopping );
+					}
+					else
+					{
+						uSamplesAdded += uSamplesLeftTillTrigger;
+						setState( m_eState == EState::Pending ? EState::Starting : EState::Stopping );
 						continue;
 					}
-					else if (m_eState == EState::OneShot )
-					{
-						setState( EState::Stopping );
-						continue;
-					}
-					else if (m_eState == EState::TailPending )
-						eNextState = EState::Starting;
-					else if (m_eState == EState::TailOneShot )
-						eNextState = EState::OneShot;
 				}
 
 				// If we're currently mixing in the tail, jump down
@@ -365,28 +365,32 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
 			case EState::Tail:
             // This extra case is to handle 
             // TailPending and TailOneShot
-            Case_Tail:
-                // If we're in the tail state, manually advance the number 
-                // of samples added, since the tail  loop doesn't do that 
-                // (shitty, I know, but if we don't then we'll loop forever)
-                uSamplesAdded += uLastTailSample - uFirstTailSample;
+			Case_Tail:
+				if ( bTailHeadOverlap == false )
+				{
+					// If we're in the tail state, manually advance the number 
+					// of samples added, since the tail  loop doesn't do that 
+					// (shitty, I know, but if we don't then we'll loop forever)
+					uSamplesAdded += uLastTailSample - uFirstTailSample;
 
-                // If we'll hit the end of the tail
-                if ( uLastTailSample == uTotalSampleCount )
-                {
-                    // A real tail means we're stopped
-                    if ( m_eState == EState::Tail )
-                        eNextState = EState::Stopped;
-                    // A pending tail means we're either pending or starting
-                    else if ( m_eState == EState::TailPending && eNextState != EState::Starting )
-                        eNextState = EState::Pending;
-                    else if ( m_eState == EState::TailOneShot && eNextState != EState::Stopping )
-                        eNextState = EState::OneShot;
-                }
+					// If we'll hit the end of the tail
+					if ( uLastTailSample == uTotalSampleCount )
+					{
+						// A real tail means we're stopped
+						if ( m_eState == EState::Tail )
+							eNextState = EState::Stopped;
+						// A pending tail means we're either pending or starting
+						else if ( m_eState == EState::TailPending && eNextState != EState::Starting )
+							eNextState = EState::Pending;
+						else if ( m_eState == EState::TailOneShot && eNextState != EState::Stopping )
+							eNextState = EState::OneShot;
+					}
 
-                // Make sure these loops don't get hit
-                uLastHeadSample = 0;
-                uLastFadeoutToBegin = 0;
+					// Make sure these loops don't get hit
+					uLastHeadSample = 0;
+					uLastFadeoutToBegin = 0;
+				}
+
                 break;
 
                 // We shouldn't be doing anything
@@ -408,8 +412,6 @@ void Voice::RenderData( float * const pMixBuffer, const size_t uSamplesDesired, 
 			float fSampleVal = m_fVolume * pAudioData[uTailIdx];
 			*pFirstTailMixSample++ += fSampleVal;
 		}
-
-
 		
         // Fade out to target sample
 		for ( size_t uFadeoutIdx = uHeadIdx; uFadeoutIdx < uLastFadeoutToBegin; uFadeoutIdx++ )
