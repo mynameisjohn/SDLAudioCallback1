@@ -117,7 +117,6 @@ def InitLoopManager(cScene):
                     diLoopToVoiceID[l] = voiceID
                     voiceID += 1
                 l.voiceID = diLoopToVoiceID[l]
-                print(l.name, l.voiceID)
 
     # This dict maps the number keys to edge vectors defined in diEdges
     # (provided there are less than 10 nodes...)
@@ -144,7 +143,6 @@ def InitLoopManager(cScene):
         nonlocal cSM
         nonlocal arpClip
         t = (arpClip.name, arpClip.voiceID, arpClip.vol, int(cSM.GetMaxSampleCount() / 4))
-        print(pylSoundManager.CMDOneShot, t)
         cSM.SendMessage((pylSoundManager.CMDOneShot, t))
     liButtons.append(Button(SDLK.SDLK_f, None, fnOneShotKey))
 
