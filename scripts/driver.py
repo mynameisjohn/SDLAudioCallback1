@@ -1,3 +1,8 @@
+# debug
+#import ptvsd
+#ptvsd.enable_attach(secret = None)
+#ptvsd.wait_for_attach()
+
 # Local modules
 import Init
 
